@@ -1,6 +1,6 @@
 # 此域｜報稅記帳簿
 
-小型商號／工作室使用的收入、支出、內帳、外帳、會計科目、收據與發票整理 Web App。可部署於 GitHub Pages。
+小型商號／工作室使用的收入、支出、內帳、外帳、會計科目、收據與發票整理 Web App。可部署於 GitHub Pages，並可選擇使用 Supabase 做手機與電腦同步。
 
 ## 核心原則
 
@@ -27,7 +27,90 @@
 - 小規模營業人進項稅額 10% 扣減估算欄
 - 完整 CSV、外帳 CSV、內帳 CSV 分開匯出
 - JSON 備份與匯入
+- Supabase 雲端同步：流水帳與收據／發票附件
 - PWA 基礎離線快取
+
+## 手機與電腦同步設定
+
+GitHub Pages 只能託管 HTML、CSS、JavaScript 靜態檔案；同步資料需要另外接雲端後端。本工具使用 Supabase：
+
+- Supabase Auth：用 Email 魔法連結登入
+- Supabase Database：保存流水帳 JSON
+- Supabase Storage：保存收據、發票照片或 PDF
+
+### 1. 建立 Supabase 專案
+
+到 Supabase 建立一個新 project。
+
+### 2. 設定 Auth 網址
+
+Supabase 後台：
+
+```text
+Authentication > URL Configuration
+```
+
+設定：
+
+```text
+Site URL: https://h-s017.github.io/taxbook/
+Redirect URLs: https://h-s017.github.io/taxbook/
+```
+
+### 3. 建立 private Storage bucket
+
+Supabase 後台：
+
+```text
+Storage > New bucket
+```
+
+設定：
+
+```text
+Bucket name: receipts
+Public bucket: OFF
+```
+
+### 4. 執行 SQL
+
+打開 Supabase SQL Editor，把 repo 內的 `supabase-setup.sql` 全部貼上執行。
+
+這會建立：
+
+- `taxbook_records` 資料表
+- Row Level Security
+- 只允許本人讀寫自己的記帳資料
+- `receipts` bucket 的本人附件讀寫規則
+
+### 5. 複製 Supabase 設定到 Web App
+
+Supabase 後台：
+
+```text
+Project Settings > API
+```
+
+複製：
+
+- Project URL
+- anon key / publishable key
+
+貼到 Web App 的「手機／電腦雲端同步」區塊。
+
+### 6. 登入與同步
+
+1. 輸入 Email
+2. 按「寄登入連結」
+3. 到信箱點登入連結
+4. 回到 Web App
+5. 按「上傳到雲端」或「從雲端下載」
+
+建議流程：
+
+- 主要輸入裝置：按「上傳到雲端」
+- 另一台裝置：登入後按「從雲端下載」
+- 每次大量新增資料後，手動按一次「上傳到雲端」
 
 ## 目前內建會計科目
 
@@ -77,10 +160,18 @@
 
 這是純前端靜態工具。
 
+未設定 Supabase 時：
+
 - 流水帳資料：儲存在瀏覽器 localStorage
 - 收據／發票附件：儲存在瀏覽器 IndexedDB
 - 資料不會上傳到 GitHub
 - 換手機、換瀏覽器、清除瀏覽器資料、使用無痕模式，都可能造成資料或附件遺失
+
+設定 Supabase 後：
+
+- 手動按「上傳到雲端」才會同步
+- 手動按「從雲端下載」才會覆蓋目前裝置的本機資料
+- 收據與發票附件會同步到 private Storage bucket
 
 建議做法：
 
@@ -139,6 +230,7 @@ https://h-s017.github.io/taxbook/
 7. 設定是否可列外帳／報稅
 8. 上傳收據或發票照片
 9. 儲存
+10. 有需要同步時，按「上傳到雲端」
 
 每月底：
 

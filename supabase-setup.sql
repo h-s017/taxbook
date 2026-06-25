@@ -35,11 +35,17 @@ on public.taxbook_records for delete
 to authenticated
 using (auth.uid() = user_id);
 
--- Create a private Storage bucket named receipts in Supabase Dashboard first:
+-- Create or keep a private Storage bucket for receipts.
+-- If this insert is blocked by project permissions, create it in Dashboard:
 -- Storage > New bucket > Name: receipts > Public bucket: OFF
+insert into storage.buckets (id, name, public)
+values ('receipts', 'receipts', false)
+on conflict (id) do update
+set public = false;
 
 -- Storage object policies for private receipt files.
 -- File paths are written as: user_id / entry_id / filename
+-- Example: 00000000-0000-0000-0000-000000000000/entry-id/receipt.jpg
 
 drop policy if exists "receipts select own" on storage.objects;
 drop policy if exists "receipts insert own" on storage.objects;
@@ -52,6 +58,7 @@ to authenticated
 using (
   bucket_id = 'receipts'
   and (storage.foldername(name))[1] = auth.uid()::text
+  and array_length(string_to_array(name, '/'), 1) >= 3
 );
 
 create policy "receipts insert own"
@@ -60,6 +67,7 @@ to authenticated
 with check (
   bucket_id = 'receipts'
   and (storage.foldername(name))[1] = auth.uid()::text
+  and array_length(string_to_array(name, '/'), 1) >= 3
 );
 
 create policy "receipts update own"
@@ -68,10 +76,12 @@ to authenticated
 using (
   bucket_id = 'receipts'
   and (storage.foldername(name))[1] = auth.uid()::text
+  and array_length(string_to_array(name, '/'), 1) >= 3
 )
 with check (
   bucket_id = 'receipts'
   and (storage.foldername(name))[1] = auth.uid()::text
+  and array_length(string_to_array(name, '/'), 1) >= 3
 );
 
 create policy "receipts delete own"
@@ -80,4 +90,5 @@ to authenticated
 using (
   bucket_id = 'receipts'
   and (storage.foldername(name))[1] = auth.uid()::text
+  and array_length(string_to_array(name, '/'), 1) >= 3
 );

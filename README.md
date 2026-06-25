@@ -26,6 +26,7 @@
 - 會計科目彙總表
 - 小規模營業人進項稅額 10% 扣減估算欄
 - 完整 CSV、外帳 CSV、內帳 CSV 分開匯出
+- 完整 CSV 會包含附件有無、檔名、類型與雲端路徑 metadata
 - JSON 備份與匯入
 - Supabase 雲端同步：流水帳與收據／發票附件
 - PWA 基礎離線快取
@@ -37,6 +38,14 @@ GitHub Pages 只能託管 HTML、CSS、JavaScript 靜態檔案；同步資料需
 - Supabase Auth：用 Email 魔法連結登入
 - Supabase Database：保存流水帳 JSON
 - Supabase Storage：保存收據、發票照片或 PDF
+
+安全提醒：
+
+- 前端只能填 Supabase Project URL 與 anon / publishable key，不可使用 service role key。
+- GitHub repo 不應提交任何使用者流水帳、發票、收據、匯出的 JSON/CSV，或 Supabase secret key。
+- `receipts` Storage bucket 必須是 private bucket。
+- App 上傳附件時會使用 `user.id/entry.id/filename` 路徑；SQL policy 會限制登入者只能讀寫自己 `user.id` 開頭的檔案。
+- 目前同步是手動整包同步，不是即時雙向合併。上傳會覆蓋雲端；下載會覆蓋本機。操作前 App 會顯示本機與雲端的新舊時間與備份提醒。
 
 ### 1. 建立 Supabase 專案
 
@@ -72,6 +81,8 @@ Bucket name: receipts
 Public bucket: OFF
 ```
 
+也可以直接執行 `supabase-setup.sql`，SQL 會嘗試建立或修正 `receipts` bucket 為 private。如果 Supabase 權限不允許 SQL 建 bucket，請改用後台手動建立。
+
 ### 4. 執行 SQL
 
 打開 Supabase SQL Editor，把 repo 內的 `supabase-setup.sql` 全部貼上執行。
@@ -82,6 +93,8 @@ Public bucket: OFF
 - Row Level Security
 - 只允許本人讀寫自己的記帳資料
 - `receipts` bucket 的本人附件讀寫規則
+
+若 SQL 顯示 policy 已存在或 bucket 已存在，可重新執行；檔案中的 policy 會先 drop 再 create。
 
 ### 5. 複製 Supabase 設定到 Web App
 
@@ -111,6 +124,9 @@ Project Settings > API
 - 主要輸入裝置：按「上傳到雲端」
 - 另一台裝置：登入後按「從雲端下載」
 - 每次大量新增資料後，手動按一次「上傳到雲端」
+- 下載雲端資料前，若本機已有資料，建議先按「備份 JSON」。
+- 若 App 顯示雲端資料比本機新，請先確認另一台裝置是否剛上傳過，避免用舊資料覆蓋。
+- JSON 備份不包含附件影像/PDF；附件請保留原始檔，或透過 Supabase private Storage 同步。
 
 ## 目前內建會計科目
 

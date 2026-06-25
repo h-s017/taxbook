@@ -74,8 +74,8 @@ function lastBackupAt(){ const meta=JSON.parse(localStorage.getItem(BACKUP_META_
 function latestEntryTime(list){ return list.map(e=>e.updatedAt||e.createdAt||e.date).filter(Boolean).sort().at(-1) || ''; }
 function fmtTime(value){ return value ? new Date(value).toLocaleString('zh-TW') : '無紀錄'; }
 function saveEntriesChanged(){ saveEntries(); markLocalChanged(); }
-function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify({bizName:$('bizName').value,bizBan:$('bizBan').value,taxMode:$('taxMode').value,yearFilter:$('yearFilter').value})); }
-function loadSettings(){ const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); $('bizName').value=s.bizName||'藏花香徑工作室'; $('bizBan').value=s.bizBan||'61269475'; $('taxMode').value=s.taxMode||'small'; $('yearFilter').value=s.yearFilter||new Date().getFullYear(); }
+function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify({bizName:$('bizName').value,bizBan:$('bizBan').value,taxMode:$('taxMode').value,yearFilter:$('yearFilter').value,bookFilter:$('bookFilter')?.value||'all'})); }
+function loadSettings(){ const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); $('bizName').value=s.bizName||'藏花香徑工作室'; $('bizBan').value=s.bizBan||'61269475'; $('taxMode').value=s.taxMode||'small'; $('yearFilter').value=s.yearFilter||new Date().getFullYear(); if($('bookFilter')) $('bookFilter').value=s.bookFilter||'all'; }
 
 function saveSyncSettings(){ localStorage.setItem(SYNC_SETTINGS_KEY, JSON.stringify({url:$('supabaseUrl').value.trim(),key:$('supabaseKey').value.trim(),email:$('syncEmail').value.trim()})); }
 function loadSyncSettings(){ const s=JSON.parse(localStorage.getItem(SYNC_SETTINGS_KEY)||'{}'); $('supabaseUrl').value=s.url||''; $('supabaseKey').value=s.key||''; $('syncEmail').value=s.email||''; }
@@ -137,7 +137,7 @@ function safeFileName(name){ return encodeURIComponent((name || 'receipt').repla
 function html(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function receiptPath(e){ return e.cloudReceiptPath || e.receipt?.cloudPath || ''; }
 
-function getVisibleEntries(){ const q=$('searchInput').value.trim().toLowerCase(); return entries.filter(e=>new Date(e.date).getFullYear()===selectedYear()).filter(e=>!q||JSON.stringify(e).toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date)); }
+function getVisibleEntries(){ const q=$('searchInput').value.trim().toLowerCase(); const scope=$('bookFilter')?.value||'all'; return entries.filter(e=>new Date(e.date).getFullYear()===selectedYear()).filter(e=>scope==='all'||(scope==='tax'&&isTaxBook(e))||(scope==='internal'&&isInternalBook(e))||(scope==='review'&&e.bookScope==='review')).filter(e=>!q||JSON.stringify(e).toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date)); }
 async function putReceipt(id,file){ if(!file) return null; const data=await file.arrayBuffer(); await putReceiptRaw(id,file.name,file.type,data); return {name:file.name,type:file.type}; }
 function putReceiptRaw(id,name,type,data){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put({id,name,type,data,savedAt:new Date().toISOString()}); tx.oncomplete=()=>resolve({name,type}); tx.onerror=()=>reject(tx.error); }); }
 function getReceipt(id){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE,'readonly'); const request=tx.objectStore(STORE).get(id); request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error); }); }
@@ -296,7 +296,7 @@ function bind(){
   $('resetFormBtn').addEventListener('click',resetForm);
   $('entriesTable').addEventListener('click',handleTableClick);
   $('searchInput').addEventListener('input',render);
-  ['bizName','bizBan','taxMode','yearFilter'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();render();}));
+  ['bizName','bizBan','taxMode','yearFilter','bookFilter'].forEach(id=>$(id)?.addEventListener('change',()=>{saveSettings();render();}));
   $('exportCsvBtn').addEventListener('click',()=>exportCsv('full'));
   $('exportTaxCsvBtn').addEventListener('click',()=>exportCsv('tax'));
   $('exportInternalCsvBtn').addEventListener('click',()=>exportCsv('internal'));

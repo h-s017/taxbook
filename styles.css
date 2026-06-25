@@ -82,6 +82,9 @@ textarea{resize:vertical;min-height:92px}
 .stat span{display:block;color:var(--muted);font-size:16px}
 .stat strong{display:block;font-size:32px;margin-top:6px;line-height:1.2}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+.entry-tools{display:flex;gap:8px;align-items:center}
+.entry-tools select{min-width:128px}
+.entry-tools input{min-width:260px}
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px}
 table{width:100%;border-collapse:collapse;min-width:940px;background:white}
 th,td{
@@ -107,6 +110,8 @@ footer{text-align:center;padding:22px;color:var(--muted);font-size:15.5px}
 @media(max-width:800px){
   body{font-size:18px}
   .hero,.business-card,.section-head{display:block}
+  .entry-tools{display:grid;gap:10px}
+  .entry-tools select,.entry-tools input{width:100%;min-width:0}
   .hero{padding:24px 18px}
   .hero-actions{margin-top:18px}
   .hero-actions button,.hero-actions .file-btn{width:100%;justify-content:center;text-align:center}

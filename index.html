@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>此域｜報稅記帳簿</title>
+  <meta name="description" content="小型商號用的收入、支出、收據與發票管理工具，可部署於 GitHub Pages。" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">HANA SCENT ARTIST</p>
+      <h1>此域｜報稅記帳簿</h1>
+      <p class="sub">收入、支出、收據與發票索引。資料只存在你的瀏覽器本機，可匯出 CSV / JSON 備份。</p>
+    </div>
+    <div class="hero-actions">
+      <button id="exportCsvBtn" class="primary">匯出 CSV</button>
+      <button id="exportJsonBtn">備份 JSON</button>
+      <label class="file-btn">匯入 JSON<input id="importJsonInput" type="file" accept="application/json" hidden></label>
+    </div>
+  </header>
+
+  <main>
+    <section class="card business-card">
+      <div>
+        <h2>商號資料</h2>
+        <p>用於匯出檔案標頭與自我檢查，不會上傳。</p>
+      </div>
+      <div class="grid two">
+        <label>營業人名稱<input id="bizName" placeholder="藏花香徑工作室"></label>
+        <label>統一編號<input id="bizBan" placeholder="61269475"></label>
+        <label>稅籍型態
+          <select id="taxMode">
+            <option value="small">小規模／免用統一發票</option>
+            <option value="invoice">使用統一發票</option>
+            <option value="unknown">尚未核定／待確認</option>
+          </select>
+        </label>
+        <label>年度<input id="yearFilter" type="number" min="2024" max="2099"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>新增一筆</h2>
+      <form id="entryForm">
+        <div class="grid three">
+          <label>日期<input id="date" type="date" required></label>
+          <label>類型
+            <select id="kind" required>
+              <option value="income">收入</option>
+              <option value="expense">支出</option>
+            </select>
+          </label>
+          <label>憑證類型
+            <select id="voucherType">
+              <option>電子發票</option>
+              <option>三聯式發票</option>
+              <option>二聯式發票</option>
+              <option>收據</option>
+              <option>電商交易紀錄</option>
+              <option>銀行/刷卡紀錄</option>
+              <option>內部憑證</option>
+              <option>無憑證待補</option>
+            </select>
+          </label>
+          <label>發票/收據號碼<input id="voucherNo" placeholder="例：AB12345678"></label>
+          <label>交易對象<input id="counterparty" placeholder="客戶或廠商名稱"></label>
+          <label>對方統編<input id="counterpartyBan" placeholder="可空白"></label>
+          <label>分類
+            <select id="category"></select>
+          </label>
+          <label>付款方式
+            <select id="paymentMethod">
+              <option>現金</option><option>轉帳</option><option>刷卡</option><option>LINE Pay</option><option>街口</option><option>平台代收</option><option>其他</option>
+            </select>
+          </label>
+          <label>專案/用途<input id="project" placeholder="例：此域開幕、KPIA、材料採購"></label>
+          <label>未稅金額<input id="netAmount" type="number" min="0" step="1" placeholder="可留空"></label>
+          <label>營業稅額<input id="taxAmount" type="number" min="0" step="1" value="0"></label>
+          <label>總金額<input id="grossAmount" type="number" min="0" step="1" required></label>
+        </div>
+        <label>備註<textarea id="note" rows="2" placeholder="例：課程材料、租金、可否扣抵待會計確認"></textarea></label>
+        <label class="upload-box">上傳收據/發票照片或 PDF
+          <input id="receiptFile" type="file" accept="image/*,application/pdf" capture="environment">
+          <span id="fileHint">未選擇檔案</span>
+        </label>
+        <div class="form-actions">
+          <button class="primary" type="submit">儲存</button>
+          <button type="button" id="resetFormBtn">清空</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="dashboard">
+      <article class="stat"><span>年度收入</span><strong id="sumIncome">0</strong></article>
+      <article class="stat"><span>年度支出</span><strong id="sumExpense">0</strong></article>
+      <article class="stat"><span>年度損益</span><strong id="sumProfit">0</strong></article>
+      <article class="stat"><span>待補憑證</span><strong id="missingDocs">0</strong></article>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>月報與申報檢查</h2>
+          <p>小規模營業人可特別留意每季進項憑證；使用統一發票者需另依會計師/國稅局申報格式整理。</p>
+        </div>
+        <button id="printBtn">列印月報</button>
+      </div>
+      <div class="table-wrap"><table id="summaryTable"></table></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>流水帳</h2>
+          <p>點選「檢視憑證」可開啟存在本機的附件。換手機或清除瀏覽器資料前，請先備份 JSON。</p>
+        </div>
+        <input id="searchInput" placeholder="搜尋日期、分類、對象、備註…">
+      </div>
+      <div class="table-wrap"><table id="entriesTable"></table></div>
+    </section>
+  </main>
+
+  <dialog id="receiptDialog">
+    <button id="closeDialog" class="close">×</button>
+    <div id="receiptPreview"></div>
+  </dialog>
+
+  <footer>
+    <p>此工具僅作記帳與憑證整理，不取代會計師或國稅局核定。報稅前請以實際稅籍核定為準。</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

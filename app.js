@@ -2,6 +2,7 @@ const DB_NAME = 'hanaTaxBookDB';
 const STORE = 'receipts';
 const STORAGE_KEY = 'hanaTaxBookEntries';
 const SETTINGS_KEY = 'hanaTaxBookSettings';
+const SYNC_SETTINGS_KEY = 'hanaTaxBookSyncSettings';
 
 const incomeCategories = ['課程收入','調香體驗收入','商品收入','訂製服務收入','企業/品牌合作','補助/獎助收入','其他收入'];
 const expenseCategories = ['原物料/香精','容器包材','場地租金','水電瓦斯','設備器材','課程教材','行銷廣告','網站/系統/平台','交通運費','平台手續費','外包/顧問','餐飲交際','辦公雜支','稅費/規費','其他支出'];
@@ -51,6 +52,8 @@ const fmt = new Intl.NumberFormat('zh-TW');
 let entries = [];
 let db;
 let editingId = null;
+let supabaseClient = null;
+let currentUser = null;
 
 function openDB(){
   return new Promise((resolve,reject)=>{
@@ -60,10 +63,49 @@ function openDB(){
     request.onerror = () => reject(request.error);
   });
 }
+
 function saveEntries(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }
 function loadEntries(){ entries = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
 function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify({bizName:$('bizName').value,bizBan:$('bizBan').value,taxMode:$('taxMode').value,yearFilter:$('yearFilter').value})); }
 function loadSettings(){ const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); $('bizName').value=s.bizName||'藏花香徑工作室'; $('bizBan').value=s.bizBan||'61269475'; $('taxMode').value=s.taxMode||'small'; $('yearFilter').value=s.yearFilter||new Date().getFullYear(); }
+
+function saveSyncSettings(){ localStorage.setItem(SYNC_SETTINGS_KEY, JSON.stringify({url:$('supabaseUrl').value.trim(),key:$('supabaseKey').value.trim(),email:$('syncEmail').value.trim()})); }
+function loadSyncSettings(){ const s=JSON.parse(localStorage.getItem(SYNC_SETTINGS_KEY)||'{}'); $('supabaseUrl').value=s.url||''; $('supabaseKey').value=s.key||''; $('syncEmail').value=s.email||''; }
+function updateCloudStatus(text, ok=false){ const el=$('cloudStatus'); if(!el) return; el.textContent=text; el.className = ok ? 'pill cloud-ok' : 'pill'; }
+function createCloudClient(){
+  const url=$('supabaseUrl').value.trim();
+  const key=$('supabaseKey').value.trim();
+  if(!url || !key){ supabaseClient=null; updateCloudStatus('未設定'); return null; }
+  if(!window.supabase){ updateCloudStatus('Supabase 程式未載入'); return null; }
+  supabaseClient = window.supabase.createClient(url,key);
+  updateCloudStatus(currentUser ? `已登入：${currentUser.email || '帳號'}` : '已設定，未登入', !!currentUser);
+  return supabaseClient;
+}
+async function refreshCloudUser(){
+  if(!supabaseClient) return;
+  const { data } = await supabaseClient.auth.getUser();
+  currentUser = data?.user || null;
+  updateCloudStatus(currentUser ? `已登入：${currentUser.email || '帳號'}` : '已設定，未登入', !!currentUser);
+}
+async function saveCloudConfig(){ saveSyncSettings(); createCloudClient(); await refreshCloudUser(); alert('同步設定已儲存。'); }
+async function sendMagicLink(){
+  const client = supabaseClient || createCloudClient();
+  if(!client) return alert('請先填 Supabase Project URL 與 anon/publishable key。');
+  const email=$('syncEmail').value.trim();
+  if(!email) return alert('請輸入登入 Email。');
+  saveSyncSettings();
+  const { error } = await client.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href.split('#')[0] } });
+  if(error) return alert('寄送登入連結失敗：' + error.message);
+  alert('已寄出登入連結。請到信箱點擊連結後，回到這個頁面同步。');
+}
+async function signOutCloud(){ if(!supabaseClient) return; await supabaseClient.auth.signOut(); currentUser=null; updateCloudStatus('已登出'); }
+async function requireUser(){
+  const client=supabaseClient || createCloudClient();
+  if(!client) throw new Error('尚未設定 Supabase。');
+  const { data, error } = await client.auth.getUser();
+  if(error || !data?.user) throw new Error('尚未登入。請先寄登入連結並完成登入。');
+  currentUser=data.user; updateCloudStatus(`已登入：${currentUser.email || '帳號'}`, true); return currentUser;
+}
 
 function listByKind(){ const k=$('kind').value; if(k==='income') return incomeCategories; if(k==='asset') return assetCategories; if(k==='transfer') return transferCategories; return expenseCategories; }
 function updateCategoryOptions(){ $('category').innerHTML = listByKind().map(x=>`<option>${x}</option>`).join(''); updateAccountOptions(); }
@@ -76,9 +118,11 @@ function selectedYear(){ return Number($('yearFilter').value || new Date().getFu
 function uid(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2); }
 function isTaxBook(e){ return e.bookScope !== 'internal' && e.taxDeductible !== 'no'; }
 function isInternalBook(e){ return e.bookScope !== 'tax'; }
+function safeFileName(name){ return encodeURIComponent((name || 'receipt').replace(/[\\/]/g,'-')); }
 
 function getVisibleEntries(){ const q=$('searchInput').value.trim().toLowerCase(); return entries.filter(e=>new Date(e.date).getFullYear()===selectedYear()).filter(e=>!q||JSON.stringify(e).toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date)); }
-async function putReceipt(id,file){ if(!file) return null; const data=await file.arrayBuffer(); return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put({id,name:file.name,type:file.type,data,savedAt:new Date().toISOString()}); tx.oncomplete=()=>resolve({name:file.name,type:file.type}); tx.onerror=()=>reject(tx.error); }); }
+async function putReceipt(id,file){ if(!file) return null; const data=await file.arrayBuffer(); await putReceiptRaw(id,file.name,file.type,data); return {name:file.name,type:file.type}; }
+function putReceiptRaw(id,name,type,data){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put({id,name,type,data,savedAt:new Date().toISOString()}); tx.oncomplete=()=>resolve({name,type}); tx.onerror=()=>reject(tx.error); }); }
 function getReceipt(id){ return new Promise((resolve,reject)=>{ const tx=db.transaction(STORE,'readonly'); const request=tx.objectStore(STORE).get(id); request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error); }); }
 function deleteReceipt(id){ return new Promise(resolve=>{ const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).delete(id); tx.oncomplete=()=>resolve(); }); }
 
@@ -108,14 +152,95 @@ function renderAccountSummary(list){ const taxList=list.filter(isTaxBook); const
 function renderEntries(list){ const rows=list.map(raw=>{ const e=migrateEntry(raw); return `<tr><td>${e.date}</td><td><span class="pill">${e.kind==='income'?'收入':e.kind==='expense'?'支出':e.kind==='asset'?'資產':'移轉'}</span></td><td>${e.bookScope==='both'?'外＋內':e.bookScope==='tax'?'外帳':e.bookScope==='internal'?'內帳':'待確認'}</td><td>${e.accountCode} ${e.accountName||accountName(e.accountCode)}</td><td>${e.internalTag||'-'}</td><td>${e.counterparty||'-'}</td><td>${e.voucherType}</td><td>${money(e.grossAmount)}</td><td>${e.receipt?`<button class="link-btn" data-view="${e.id}">檢視</button>`:'<span class="danger">未附</span>'}</td><td><button class="link-btn" data-edit="${e.id}">編輯</button> ｜ <button class="link-btn danger" data-delete="${e.id}">刪除</button></td></tr>`; }).join(''); $('entriesTable').innerHTML=`<thead><tr><th>日期</th><th>類型</th><th>帳務</th><th>會計科目</th><th>內帳標籤</th><th>對象</th><th>憑證</th><th>金額</th><th>附件</th><th>操作</th></tr></thead><tbody>${rows||'<tr><td colspan="10">尚無資料</td></tr>'}</tbody>`; }
 function render(){ const list=getVisibleEntries(); renderStats(list); renderSummary(list); renderAccountSummary(list); renderEntries(list); }
 
-async function viewReceipt(id){ const r=await getReceipt(id); if(!r){ alert('找不到附件。可能已清除瀏覽器資料。'); return; } const blob=new Blob([r.data],{type:r.type||'application/octet-stream'}); const url=URL.createObjectURL(blob); $('receiptPreview').innerHTML=r.type?.includes('pdf')?`<iframe src="${url}"></iframe>`:`<img src="${url}" alt="receipt">`; $('receiptDialog').showModal(); }
+async function viewReceipt(id){ const r=await getReceipt(id); if(!r){ alert('找不到附件。可能尚未從雲端下載，或已清除瀏覽器資料。'); return; } const blob=new Blob([r.data],{type:r.type||'application/octet-stream'}); const url=URL.createObjectURL(blob); $('receiptPreview').innerHTML=r.type?.includes('pdf')?`<iframe src="${url}"></iframe>`:`<img src="${url}" alt="receipt">`; $('receiptDialog').showModal(); }
 async function handleTableClick(ev){ const id=ev.target.dataset.view||ev.target.dataset.edit||ev.target.dataset.delete; if(!id) return; const e=entries.find(x=>x.id===id); if(ev.target.dataset.view) viewReceipt(id); if(ev.target.dataset.edit&&e) fillForm(e); if(ev.target.dataset.delete&&confirm('確定刪除這筆資料與本機附件？')){ entries=entries.filter(x=>x.id!==id); await deleteReceipt(id); saveEntries(); render(); } }
 function toCsvValue(v){ return '"'+String(v??'').replaceAll('"','""')+'"'; }
 function csvRows(list,mode='full'){ const headerFull=['營業人名稱','統一編號','日期','類型','帳務視圖','會計科目代碼','會計科目名稱','內帳標籤','補充分類','交易對象','對方統編','憑證類型','憑證號碼','付款方式','專案/用途','未稅金額','營業稅額','總金額','是否可列外帳','憑證狀態','現金流狀態','備註','有無附件']; const headerTax=['營業人名稱','統一編號','日期','類型','會計科目代碼','會計科目名稱','交易對象','對方統編','憑證類型','憑證號碼','未稅金額','營業稅額','總金額','是否可列帳','憑證狀態','備註']; const headerInternal=['日期','類型','內帳標籤','專案/用途','補充分類','交易對象','付款方式','總金額','現金流狀態','是否列外帳','備註']; const rows=list.map(migrateEntry).filter(e=>mode==='tax'?isTaxBook(e):mode==='internal'?isInternalBook(e):true).map(e=> mode==='tax' ? [$('bizName').value,$('bizBan').value,e.date,e.kind,e.accountCode,e.accountName,e.counterparty,e.counterpartyBan,e.voucherType,e.voucherNo,e.netAmount,e.taxAmount,e.grossAmount,e.taxDeductible,e.voucherStatus,e.note] : mode==='internal' ? [e.date,e.kind,e.internalTag,e.project,e.category,e.counterparty,e.paymentMethod,e.grossAmount,e.cashStatus,e.bookScope,e.note] : [$('bizName').value,$('bizBan').value,e.date,e.kind,e.bookScope,e.accountCode,e.accountName,e.internalTag,e.category,e.counterparty,e.counterpartyBan,e.voucherType,e.voucherNo,e.paymentMethod,e.project,e.netAmount,e.taxAmount,e.grossAmount,e.taxDeductible,e.voucherStatus,e.cashStatus,e.note,e.receipt?'有':'無']); return [mode==='tax'?headerTax:mode==='internal'?headerInternal:headerFull, ...rows]; }
 function exportCsv(mode='full'){ const csv='\ufeff'+csvRows(getVisibleEntries(),mode).map(r=>r.map(toCsvValue).join(',')).join('\n'); const suffix=mode==='tax'?'external_tax':mode==='internal'?'internal':'full'; downloadText(csv,`taxbook_${suffix}_${selectedYear()}.csv`,'text/csv;charset=utf-8'); }
-function exportJson(){ const data={version:2,exportedAt:new Date().toISOString(),settings:JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'),entries}; downloadText(JSON.stringify(data,null,2),`taxbook_backup_${new Date().toISOString().slice(0,10)}.json`,'application/json'); alert('JSON 備份包含流水帳資料，但不包含附件影像/PDF。附件仍需另外保存原始檔。'); }
+function exportJson(){ const data={version:3,exportedAt:new Date().toISOString(),settings:JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'),entries}; downloadText(JSON.stringify(data,null,2),`taxbook_backup_${new Date().toISOString().slice(0,10)}.json`,'application/json'); alert('JSON 備份包含流水帳資料，但不包含附件影像/PDF。附件請用雲端同步或另外保存原始檔。'); }
 function downloadText(text,filename,type){ const blob=new Blob([text],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href); }
 function importJson(file){ if(!file) return; const reader=new FileReader(); reader.onload=()=>{ const data=JSON.parse(reader.result); if(!Array.isArray(data.entries)) throw new Error('格式不符'); entries=data.entries.map(migrateEntry); localStorage.setItem(STORAGE_KEY,JSON.stringify(entries)); if(data.settings) localStorage.setItem(SETTINGS_KEY,JSON.stringify(data.settings)); loadSettings(); render(); alert('匯入完成。提醒：JSON 不含附件影像/PDF。'); }; reader.onerror=()=>alert('匯入失敗'); reader.readAsText(file); }
-function bind(){ $('entryForm').addEventListener('submit',handleSubmit); $('kind').addEventListener('change',updateCategoryOptions); $('receiptFile').addEventListener('change',e=>$('fileHint').textContent=e.target.files[0]?.name||'未選擇檔案'); $('resetFormBtn').addEventListener('click',resetForm); $('entriesTable').addEventListener('click',handleTableClick); $('searchInput').addEventListener('input',render); ['bizName','bizBan','taxMode','yearFilter'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();render();})); $('exportCsvBtn').addEventListener('click',()=>exportCsv('full')); $('exportTaxCsvBtn').addEventListener('click',()=>exportCsv('tax')); $('exportInternalCsvBtn').addEventListener('click',()=>exportCsv('internal')); $('exportJsonBtn').addEventListener('click',exportJson); $('importJsonInput').addEventListener('change',e=>importJson(e.target.files[0])); $('printBtn').addEventListener('click',()=>window.print()); $('closeDialog').addEventListener('click',()=>$('receiptDialog').close()); }
-async function init(){ db=await openDB(); loadSettings(); loadEntries(); entries=entries.map(migrateEntry); saveEntries(); bind(); resetForm(); render(); if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+
+async function uploadLocalReceipts(user, payloadEntries){
+  for(const e of payloadEntries){
+    const local = await getReceipt(e.id);
+    if(!local) continue;
+    const path = `${user.id}/${e.id}/${safeFileName(local.name)}`;
+    const blob = new Blob([local.data], { type: local.type || 'application/octet-stream' });
+    const { error } = await supabaseClient.storage.from('receipts').upload(path, blob, { upsert:true, contentType: local.type || 'application/octet-stream' });
+    if(error) throw new Error(`附件上傳失敗：${local.name}｜${error.message}`);
+    e.cloudReceiptPath = path;
+    e.receipt = { ...(e.receipt || {}), name: local.name, type: local.type, cloudPath: path };
+  }
+}
+async function downloadCloudReceipts(payloadEntries){
+  for(const e of payloadEntries){
+    const path = e.cloudReceiptPath || e.receipt?.cloudPath;
+    if(!path) continue;
+    const exists = await getReceipt(e.id);
+    if(exists) continue;
+    const { data, error } = await supabaseClient.storage.from('receipts').download(path);
+    if(error) continue;
+    const buffer = await data.arrayBuffer();
+    const fileName = e.receipt?.name || path.split('/').pop() || 'receipt';
+    const type = e.receipt?.type || data.type || 'application/octet-stream';
+    await putReceiptRaw(e.id, fileName, type, buffer);
+  }
+}
+async function pushCloud(){
+  try{
+    const user = await requireUser();
+    const payloadEntries = entries.map(migrateEntry);
+    await uploadLocalReceipts(user, payloadEntries);
+    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}');
+    const payload = { settings, entries: payloadEntries, savedAt: new Date().toISOString() };
+    const { error } = await supabaseClient.from('taxbook_records').upsert({ user_id:user.id, data:payload, updated_at:new Date().toISOString() }, { onConflict:'user_id' });
+    if(error) throw error;
+    entries = payloadEntries; saveEntries(); render();
+    alert('已上傳到雲端。手機與電腦可用同一個 Email 登入後下載。');
+  }catch(err){ alert('雲端上傳失敗：' + err.message); }
+}
+async function pullCloud(){
+  try{
+    const user = await requireUser();
+    if(entries.length && !confirm('從雲端下載會覆蓋目前這台裝置的本機流水帳。建議先備份 JSON。確定下載？')) return;
+    const { data, error } = await supabaseClient.from('taxbook_records').select('data,updated_at').eq('user_id', user.id).maybeSingle();
+    if(error) throw error;
+    if(!data?.data?.entries) return alert('雲端目前沒有資料。');
+    entries = data.data.entries.map(migrateEntry);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    if(data.data.settings){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.data.settings)); loadSettings(); }
+    await downloadCloudReceipts(entries);
+    saveEntries(); render();
+    alert('已從雲端下載。');
+  }catch(err){ alert('雲端下載失敗：' + err.message); }
+}
+
+function bind(){
+  $('entryForm').addEventListener('submit',handleSubmit);
+  $('kind').addEventListener('change',updateCategoryOptions);
+  $('receiptFile').addEventListener('change',e=>$('fileHint').textContent=e.target.files[0]?.name||'未選擇檔案');
+  $('resetFormBtn').addEventListener('click',resetForm);
+  $('entriesTable').addEventListener('click',handleTableClick);
+  $('searchInput').addEventListener('input',render);
+  ['bizName','bizBan','taxMode','yearFilter'].forEach(id=>$(id).addEventListener('change',()=>{saveSettings();render();}));
+  $('exportCsvBtn').addEventListener('click',()=>exportCsv('full'));
+  $('exportTaxCsvBtn').addEventListener('click',()=>exportCsv('tax'));
+  $('exportInternalCsvBtn').addEventListener('click',()=>exportCsv('internal'));
+  $('exportJsonBtn').addEventListener('click',exportJson);
+  $('importJsonInput').addEventListener('change',e=>importJson(e.target.files[0]));
+  $('printBtn').addEventListener('click',()=>window.print());
+  $('closeDialog').addEventListener('click',()=>$('receiptDialog').close());
+  $('saveCloudConfigBtn').addEventListener('click',saveCloudConfig);
+  $('sendMagicLinkBtn').addEventListener('click',sendMagicLink);
+  $('pushCloudBtn').addEventListener('click',pushCloud);
+  $('pullCloudBtn').addEventListener('click',pullCloud);
+  $('signOutBtn').addEventListener('click',signOutCloud);
+}
+async function init(){
+  db=await openDB(); loadSettings(); loadSyncSettings(); loadEntries(); entries=entries.map(migrateEntry); saveEntries(); bind(); resetForm(); render();
+  createCloudClient();
+  if(supabaseClient){ await refreshCloudUser(); supabaseClient.auth.onAuthStateChange((_event,session)=>{ currentUser=session?.user||null; updateCloudStatus(currentUser?`已登入：${currentUser.email || '帳號'}`:'已設定，未登入',!!currentUser); }); }
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
 init().catch(err=>{ console.error(err); alert('初始化失敗，請確認瀏覽器支援 IndexedDB。'); });

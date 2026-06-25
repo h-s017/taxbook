@@ -1,0 +1,10 @@
+{
+  "name": "此域｜報稅記帳簿",
+  "short_name": "TaxBook",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f5f0",
+  "theme_color": "#2f3a33",
+  "description": "小型商號收入、支出、收據與發票管理工具。",
+  "icons": []
+}

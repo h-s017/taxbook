@@ -39,7 +39,8 @@ window.dbToEntry = r => migrateEntry({
   internalTag:r.internal_tag,voucherType:r.voucher_type,voucherNo:r.voucher_no,counterparty:r.counterparty,
   counterpartyBan:r.counterparty_ban,category:r.category,paymentMethod:r.payment_method,project:r.project,
   netAmount:r.net_amount,taxAmount:r.tax_amount,grossAmount:r.gross_amount,taxDeductible:r.tax_deductible,
-  voucherStatus:r.voucher_status,cashStatus:r.cash_status,note:r.note,createdAt:r.created_at,updatedAt:r.updated_at,
+  voucherStatus:r.voucher_status,cashStatus:r.cash_status,cashAccountId:r.transaction_cash_flows?.[0]?.cash_account_id || '',
+  note:r.note,createdAt:r.created_at,updatedAt:r.updated_at,
   receipt:r.attachments?.[0] ? {name:r.attachments[0].file_name,type:r.attachments[0].mime_type,cloudPath:r.attachments[0].storage_path} : null
 });
 

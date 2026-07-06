@@ -132,6 +132,31 @@
       <article class="stat"><span>待補/待確認</span><strong id="missingDocs">0</strong></article>
     </section>
 
+    <section class="card" id="cashFlowAnalysisCard">
+      <div class="section-head">
+        <div>
+          <h2>獨立現金流分析</h2>
+          <p>同時依「現金流狀態」與「付款方式」分開計算。應收未收、應付未付不會混入已實現現金流。</p>
+        </div>
+        <select id="cashFlowBookFilter" aria-label="現金流帳務範圍">
+          <option value="all">全部帳務</option>
+          <option value="tax">外帳</option>
+          <option value="internal">內帳</option>
+        </select>
+      </div>
+      <div class="cashflow-summary" id="cashFlowSummary"></div>
+      <div class="cashflow-grid">
+        <div>
+          <h3>依現金流狀態</h3>
+          <div class="table-wrap"><table id="cashStatusTable"></table></div>
+        </div>
+        <div>
+          <h3>依付款方式</h3>
+          <div class="table-wrap"><table id="paymentMethodTable"></table></div>
+        </div>
+      </div>
+    </section>
+
     <section class="card"><div class="section-head"><div><h2>月報與申報檢查</h2><p>外帳統計排除「只列內帳」資料；待會計確認會另外標示。</p></div><button id="printBtn">列印月報</button></div><div class="table-wrap"><table id="summaryTable"></table></div></section>
     <section class="card"><div class="section-head"><div><h2>會計科目彙總</h2><p>依外帳可列帳資料彙總，方便交給會計師。</p></div></div><div class="table-wrap"><table id="accountSummaryTable"></table></div></section>
     <section class="card"><div class="section-head"><div><h2>流水帳</h2><p>點選「檢視憑證」可開啟存在本機或雲端同步回來的附件。</p></div><div class="entry-tools"><select id="bookFilter" aria-label="帳務篩選"><option value="all">全部帳務</option><option value="tax">外帳</option><option value="internal">內帳</option><option value="review">待確認</option></select><input id="searchInput" placeholder="搜尋日期、科目、分類、對象、備註…"></div></div><div class="table-wrap"><table id="entriesTable"></table></div></section>
@@ -142,5 +167,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
+  <script src="cashflow.js"></script>
 </body>
 </html>

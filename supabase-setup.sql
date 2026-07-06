@@ -165,6 +165,19 @@ grant execute on function public.is_company_member(uuid) to authenticated;
 grant execute on function public.can_edit_company(uuid) to authenticated;
 grant execute on function public.can_admin_company(uuid) to authenticated;
 
+create or replace function public.storage_company_id(object_name text)
+returns uuid language plpgsql immutable set search_path = public, storage as $$
+declare
+  parts text[];
+begin
+  parts := storage.foldername(object_name);
+  if array_length(parts, 1) < 1 or parts[1] !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return null;
+  end if;
+  return parts[1]::uuid;
+end;
+$$;
+
 -- onboarding RPC: atomically create company, owner membership, defaults
 create or replace function public.create_company_with_defaults(p_name text, p_ban text default null, p_tax_mode text default 'unknown')
 returns uuid language plpgsql security definer set search_path=public as $$
@@ -257,20 +270,20 @@ drop policy if exists "taxbook_v2_receipts_delete" on storage.objects;
 
 -- path: company_id/user_id/transaction_id/file_name
 create policy "taxbook_v2_receipts_select" on storage.objects for select to authenticated using (
-  bucket_id='receipts' and public.is_company_member(((storage.foldername(name))[1])::uuid)
+  bucket_id='receipts' and public.is_company_member(public.storage_company_id(name))
 );
 create policy "taxbook_v2_receipts_insert" on storage.objects for insert to authenticated with check (
-  bucket_id='receipts' and public.can_edit_company(((storage.foldername(name))[1])::uuid)
+  bucket_id='receipts' and public.can_edit_company(public.storage_company_id(name))
   and (storage.foldername(name))[2]=auth.uid()::text
 );
 create policy "taxbook_v2_receipts_update" on storage.objects for update to authenticated using (
-  bucket_id='receipts' and public.can_edit_company(((storage.foldername(name))[1])::uuid)
+  bucket_id='receipts' and public.can_edit_company(public.storage_company_id(name))
 ) with check (
-  bucket_id='receipts' and public.can_edit_company(((storage.foldername(name))[1])::uuid)
+  bucket_id='receipts' and public.can_edit_company(public.storage_company_id(name))
   and (storage.foldername(name))[2]=auth.uid()::text
 );
 create policy "taxbook_v2_receipts_delete" on storage.objects for delete to authenticated using (
-  bucket_id='receipts' and public.can_edit_company(((storage.foldername(name))[1])::uuid)
+  bucket_id='receipts' and public.can_edit_company(public.storage_company_id(name))
 );
 
 -- Keep old taxbook_records table untouched for manual migration/rollback.

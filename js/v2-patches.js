@@ -30,7 +30,7 @@ window.migrateLegacyData = async function () {
     const entry=migrateEntry({...raw,id:isUuid(raw.id)?raw.id:uid()});
     const result=await state.client.from('transactions').upsert(entryToDb(entry));
     if(result.error){failed++;continue;}
-    ok++;
+    try{await saveCashFlow(entry);ok++;}catch(error){console.error(error);failed++;}
   }
   localStorage.setItem(`taxbookMigrationDone:${state.currentCompany.id}`,new Date().toISOString());
   await loadCompanyData();

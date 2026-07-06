@@ -65,6 +65,7 @@ label{
   color:var(--muted);
   line-height:1.45;
 }
+.is-hidden{display:none !important}
 input,select,textarea{
   width:100%;
   border:1px solid var(--line);

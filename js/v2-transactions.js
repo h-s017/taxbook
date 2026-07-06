@@ -45,16 +45,28 @@ window.updateInternalTags = function () {
 };
 
 window.updateCashAccountOptions = function () {
-  let sel = $('cashAccountId');
-  if (!sel) {
+  const ensureSelect = (id, text, afterEl) => {
+    let sel = $(id);
+    if (sel) return sel;
     sel = document.createElement('select');
-    sel.id = 'cashAccountId';
+    sel.id = id;
     const label = document.createElement('label');
-    label.textContent = '資金帳戶';
+    label.id = `${id}Label`;
+    label.textContent = text;
     label.appendChild(sel);
-    $('paymentMethod').closest('label').after(label);
-  }
-  sel.innerHTML = '<option value="">未指定</option>' + TaxBookV2.state.cashAccounts.map(a => `<option value="${a.id}">${html(a.name)}</option>`).join('');
+    afterEl.after(label);
+    return sel;
+  };
+  const paymentLabel = $('paymentMethod').closest('label');
+  const cash = ensureSelect('cashAccountId', '資金帳戶', paymentLabel);
+  const from = ensureSelect('fromCashAccountId', '轉出帳戶', cash.closest('label'));
+  const to = ensureSelect('toCashAccountId', '轉入帳戶', from.closest('label'));
+  const options = '<option value="">未指定</option>' + TaxBookV2.state.cashAccounts.map(a => `<option value="${a.id}">${html(a.name)}</option>`).join('');
+  [cash, from, to].forEach(sel => { sel.innerHTML = options; });
+  const isTransfer = $('kind')?.value === 'transfer';
+  cash.closest('label').classList.toggle('is-hidden', isTransfer);
+  from.closest('label').classList.toggle('is-hidden', !isTransfer);
+  to.closest('label').classList.toggle('is-hidden', !isTransfer);
 };
 
 window.formData = function () {
@@ -69,7 +81,9 @@ window.formData = function () {
     category:$('category').value,paymentMethod:$('paymentMethod').value,project:$('project').value.trim(),
     netAmount:net,taxAmount:tax,grossAmount:gross,taxDeductible:$('taxDeductible').value,
     voucherStatus:$('voucherStatus').value,cashStatus:$('cashStatus').value,
-    cashAccountId:$('cashAccountId')?.value || '',note:$('note').value.trim()
+    cashAccountId:$('cashAccountId')?.value || '',
+    fromCashAccountId:$('fromCashAccountId')?.value || '',toCashAccountId:$('toCashAccountId')?.value || '',
+    note:$('note').value.trim()
   };
 };
 
@@ -87,12 +101,14 @@ window.resetForm = function () {
 window.fillForm = function (raw) {
   const e = migrateEntry(raw);
   TaxBookV2.state.editingId = e.id;
-  $('date').value=e.date;$('kind').value=e.kind;updateCategoryOptions();
+  $('date').value=e.date;$('kind').value=e.kind;updateCategoryOptions();updateCashAccountOptions();
   $('bookScope').value=e.bookScope;$('accountCode').value=e.accountCode;updateInternalTags();$('internalTag').value=e.internalTag;
   $('voucherType').value=e.voucherType;$('voucherNo').value=e.voucherNo;$('counterparty').value=e.counterparty;$('counterpartyBan').value=e.counterpartyBan;
   $('category').value=e.category;$('paymentMethod').value=e.paymentMethod;$('project').value=e.project;$('netAmount').value=e.netAmount;$('taxAmount').value=e.taxAmount;$('grossAmount').value=e.grossAmount;
   $('taxDeductible').value=e.taxDeductible;$('voucherStatus').value=e.voucherStatus;$('cashStatus').value=e.cashStatus;$('note').value=e.note;
   if ($('cashAccountId')) $('cashAccountId').value=e.cashAccountId || '';
+  if ($('fromCashAccountId')) $('fromCashAccountId').value=e.fromCashAccountId || '';
+  if ($('toCashAccountId')) $('toCashAccountId').value=e.toCashAccountId || '';
   $('fileHint').textContent='編輯中：可重新上傳附件';
   scrollTo({top:0,behavior:'smooth'});
 };
@@ -115,12 +131,22 @@ window.uploadAttachment = async function (transactionId, file) {
 window.saveCashFlow = async function (entry) {
   const state = TaxBookV2.state;
   await state.client.from('transaction_cash_flows').delete().eq('transaction_id', entry.id);
-  if (entry.kind === 'transfer' || !entry.cashAccountId) return;
-  const result = await state.client.from('transaction_cash_flows').insert({
-    company_id:state.currentCompany.id,transaction_id:entry.id,cash_account_id:entry.cashAccountId,
-    direction:entry.kind === 'income' ? 'in' : 'out',amount:Number(entry.grossAmount || 0),status:entry.cashStatus,
-    settled_at:entry.cashStatus === 'paid' ? new Date().toISOString() : null
-  });
+  const settled_at = entry.cashStatus === 'paid' ? new Date().toISOString() : null;
+  let rows = [];
+  if (entry.kind === 'transfer') {
+    if (!entry.fromCashAccountId || !entry.toCashAccountId) return;
+    rows = [
+      {cash_account_id:entry.fromCashAccountId,direction:'out'},
+      {cash_account_id:entry.toCashAccountId,direction:'in'}
+    ];
+  } else if (entry.cashAccountId) {
+    rows = [{cash_account_id:entry.cashAccountId,direction:entry.kind === 'income' ? 'in' : 'out'}];
+  }
+  if (!rows.length) return;
+  const result = await state.client.from('transaction_cash_flows').insert(rows.map(row => ({
+    company_id:state.currentCompany.id,transaction_id:entry.id,cash_account_id:row.cash_account_id,
+    direction:row.direction,amount:Number(entry.grossAmount || 0),status:entry.cashStatus,settled_at
+  })));
   if (result.error) throw result.error;
 };
 
@@ -131,6 +157,8 @@ window.handleSubmit = async function (event) {
   if (!roleCanEdit()) return alert('目前權限不可編輯。');
   const old=state.entries.find(x=>x.id===state.editingId);
   const entry=migrateEntry({...old,...formData(),id:state.editingId || uid(),updatedAt:new Date().toISOString()});
+  if (entry.kind === 'transfer' && (!entry.fromCashAccountId || !entry.toCashAccountId)) return alert('內部移轉需選擇轉出與轉入帳戶。');
+  if (entry.kind === 'transfer' && entry.fromCashAccountId === entry.toCashAccountId) return alert('轉出與轉入帳戶不可相同。');
   const file=$('receiptFile').files[0];
   if (!navigator.onLine) {
     state.entries=state.editingId?state.entries.map(x=>x.id===entry.id?entry:x):[entry,...state.entries];

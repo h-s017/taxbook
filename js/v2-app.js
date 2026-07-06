@@ -9,7 +9,7 @@ window.saveBusinessSettings = async function () {
 
 window.bindV2 = function () {
   $('entryForm').addEventListener('submit', handleSubmit);
-  $('kind').addEventListener('change', updateCategoryOptions);
+  $('kind').addEventListener('change', () => { updateCategoryOptions(); updateCashAccountOptions(); });
   $('receiptFile').addEventListener('change', e => $('fileHint').textContent=e.target.files[0]?.name||'未選擇檔案');
   $('resetFormBtn').onclick=resetForm;
   $('entriesTable').addEventListener('click', handleTableClick);

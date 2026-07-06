@@ -1,8 +1,8 @@
-const CACHE_NAME = 'hana-tax-book-v12';
+const CACHE_NAME = 'hana-tax-book-v14';
 const ASSETS = [
   './','./index.html','./styles.css','./manifest.webmanifest',
   './js/v2-core.js','./js/v2-data.js','./js/v2-auth.js','./js/v2-company.js',
-  './js/v2-transactions.js','./js/v2-reports.js','./js/v2-app.js',
+  './js/v2-transactions.js','./js/v2-reports.js','./js/v2-patches.js','./js/v2-app.js',
   './cashflow.js','./profitloss.js'
 ];
 
@@ -17,9 +17,14 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  const shouldCache = url.origin === location.origin;
   event.respondWith(fetch(event.request).then(response => {
-    const copy = response.clone();
-    caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+    if (shouldCache && response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+    }
     return response;
   }).catch(() => caches.match(event.request)));
 });

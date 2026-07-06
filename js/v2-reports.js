@@ -70,7 +70,12 @@ window.migrateLegacyData=async function(){
   if(!legacy.length)return alert('沒有舊資料。');
   if(!confirm(`將 ${legacy.length} 筆舊資料匯入「${s.currentCompany.name}」。原本 localStorage 不會刪除。確定？`))return;
   let ok=0;
-  for(const e of legacy){const result=await s.client.from('transactions').upsert(entryToDb(e));if(!result.error)ok++;}
+  for(const e of legacy){
+    const result=await s.client.from('transactions').upsert(entryToDb(e));
+    if(!result.error){
+      try{await saveCashFlow(e);ok++;}catch(error){console.error(error);}
+    }
+  }
   localStorage.setItem(`taxbookMigrationDone:${s.currentCompany.id}`,new Date().toISOString());
   await loadCompanyData();alert(`完成匯入 ${ok}/${legacy.length} 筆。`);
 };
@@ -80,7 +85,14 @@ window.pushCloud=async function(){
   const q=pendingOps();if(!q.length)return alert('沒有待同步資料。');let failed=[];
   for(const op of q){
     if(op.type==='delete'){const r=await s.client.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',op.id).eq('company_id',s.currentCompany.id);if(r.error)failed.push(op);}
-    else {const r=await s.client.from('transactions').upsert(entryToDb(migrateEntry(op.entry)));if(r.error)failed.push(op);}
+    else {
+      const entry=migrateEntry(op.entry);
+      const r=await s.client.from('transactions').upsert(entryToDb(entry));
+      if(r.error)failed.push(op);
+      else {
+        try{await saveCashFlow(entry);}catch(error){console.error(error);failed.push(op);}
+      }
+    }
   }
   localStorage.setItem(pendingKey(),JSON.stringify(failed));await loadCompanyData();alert(failed.length?`仍有 ${failed.length} 筆同步失敗。`:'待同步資料已完成。');
 };

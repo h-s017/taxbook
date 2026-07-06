@@ -4,9 +4,15 @@ window.TAXBOOK_DEFAULT_SUPABASE_KEY = 'sb_publishable_3j-yywRAZSIE7JkXgR8YUw_naV
 window.loadSyncSettings = function () {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(TaxBookV2.keys.sync) || '{}'); } catch {}
-  $('supabaseUrl').value = s.url || TAXBOOK_DEFAULT_SUPABASE_URL;
-  $('supabaseKey').value = s.key || TAXBOOK_DEFAULT_SUPABASE_KEY;
+  const oldProject = String(s.url || '').includes('dgsdfgikoyhxtdskjkrj.supabase.co');
+  const url = oldProject ? TAXBOOK_DEFAULT_SUPABASE_URL : (s.url || TAXBOOK_DEFAULT_SUPABASE_URL);
+  const key = oldProject ? TAXBOOK_DEFAULT_SUPABASE_KEY : (s.key || TAXBOOK_DEFAULT_SUPABASE_KEY);
+  $('supabaseUrl').value = url;
+  $('supabaseKey').value = key;
   $('syncEmail').value = s.email || '';
+  if (oldProject) {
+    localStorage.setItem(TaxBookV2.keys.sync, JSON.stringify({url,key,email:s.email || ''}));
+  }
 };
 
 window.saveSyncSettings = function () {

@@ -1,8 +1,11 @@
+window.TAXBOOK_DEFAULT_SUPABASE_URL = 'https://fomxcpizeonovubegfio.supabase.co';
+window.TAXBOOK_DEFAULT_SUPABASE_KEY = 'sb_publishable_3j-yywRAZSIE7JkXgR8YUw_naVQZcvK';
+
 window.loadSyncSettings = function () {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(TaxBookV2.keys.sync) || '{}'); } catch {}
-  $('supabaseUrl').value = s.url || '';
-  $('supabaseKey').value = s.key || '';
+  $('supabaseUrl').value = s.url || TAXBOOK_DEFAULT_SUPABASE_URL;
+  $('supabaseKey').value = s.key || TAXBOOK_DEFAULT_SUPABASE_KEY;
   $('syncEmail').value = s.email || '';
 };
 
@@ -22,8 +25,7 @@ window.cloudStatus = function (text, ok) {
 };
 
 window.authRedirectUrl = function () {
-  const path = location.pathname.endsWith('/') ? location.pathname : `${location.pathname}/`;
-  return `${location.origin}${path}`;
+  return 'https://h-s017.github.io/taxbook/';
 };
 
 window.createCloudClient = function () {
@@ -65,10 +67,10 @@ window.explainAuthEmailError = function (error) {
   const msg = String(error?.message || error || '未知錯誤');
   const lower = msg.toLowerCase();
   if (lower.includes('email address not authorized')) {
-    return '此 Email 不在 Supabase 專案團隊允許名單內。預設 SMTP 只寄給專案團隊成員；請改用專案團隊成員 Email，或在 Supabase 設定 Custom SMTP。';
+    return '此 Email 不在 Supabase 專案允許名單內。請改用專案成員 Email，或設定 Custom SMTP。';
   }
   if (lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Supabase 寄信次數已達限制。請稍後再試，或設定 Custom SMTP。';
+    return 'Supabase 寄信次數已達限制。TaxBook 已切換到新的 active project；請重新整理後再試。';
   }
   if (lower.includes('redirect') || lower.includes('url')) {
     return `登入回跳網址可能未允許。請在 Supabase Auth URL Configuration 加入：${authRedirectUrl()}`;
@@ -79,7 +81,7 @@ window.explainAuthEmailError = function (error) {
 window.sendMagicLink = async function () {
   const client = TaxBookV2.state.client || createCloudClient();
   const email = $('syncEmail').value.trim();
-  if (!client) return alert('請先填 Supabase Project URL 與 publishable/anon key。');
+  if (!client) return alert('請先確認 Supabase Project URL 與 publishable key。');
   if (!email) return alert('請輸入 Email。');
   saveSyncSettings();
   cloudStatus('正在寄送登入信…', false);

@@ -1,5 +1,10 @@
-const CACHE_NAME = 'hana-tax-book-v11';
-const ASSETS = ['./','./index.html','./styles.css','./app.js','./cashflow.js','./profitloss.js','./manifest.webmanifest'];
+const CACHE_NAME = 'hana-tax-book-v12';
+const ASSETS = [
+  './','./index.html','./styles.css','./manifest.webmanifest',
+  './js/v2-core.js','./js/v2-data.js','./js/v2-auth.js','./js/v2-company.js',
+  './js/v2-transactions.js','./js/v2-reports.js','./js/v2-app.js',
+  './cashflow.js','./profitloss.js'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

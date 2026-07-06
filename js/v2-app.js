@@ -57,4 +57,12 @@ window.initV2 = async function () {
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 };
 
-initV2().catch(error=>{console.error(error);alert(`初始化失敗：${error.message}`);});
+window.loadV2PatchThenInit = function () {
+  const script=document.createElement('script');
+  script.src='js/v2-patches.js';
+  script.onload=()=>initV2().catch(error=>{console.error(error);alert(`初始化失敗：${error.message}`);});
+  script.onerror=()=>initV2().catch(error=>{console.error(error);alert(`初始化失敗：${error.message}`);});
+  document.head.appendChild(script);
+};
+
+loadV2PatchThenInit();

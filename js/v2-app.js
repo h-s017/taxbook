@@ -57,12 +57,21 @@ window.initV2 = async function () {
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 };
 
-window.loadV2PatchThenInit = function () {
-  const script=document.createElement('script');
-  script.src='js/v2-patches.js';
-  script.onload=()=>initV2().catch(error=>{console.error(error);alert(`初始化失敗：${error.message}`);});
-  script.onerror=()=>initV2().catch(error=>{console.error(error);alert(`初始化失敗：${error.message}`);});
-  document.head.appendChild(script);
+window.loadScriptOnce = function (src) {
+  return new Promise(resolve => {
+    const script=document.createElement('script');
+    script.src=src;
+    script.onload=resolve;
+    script.onerror=resolve;
+    document.head.appendChild(script);
+  });
 };
 
-loadV2PatchThenInit();
+window.loadV2OverridesThenInit = async function () {
+  await loadScriptOnce('js/v2-patches.js');
+  await loadScriptOnce('js/v2-owner-company.js');
+  await loadScriptOnce('js/v2-owner-data.js');
+  await initV2();
+};
+
+loadV2OverridesThenInit().catch(error=>{console.error(error);alert(`初始化失敗：${error.message}`);});

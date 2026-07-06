@@ -21,6 +21,11 @@ window.cloudStatus = function (text, ok) {
   el.className = ok ? 'pill cloud-ok' : 'pill';
 };
 
+window.authRedirectUrl = function () {
+  const path = location.pathname.endsWith('/') ? location.pathname : `${location.pathname}/`;
+  return `${location.origin}${path}`;
+};
+
 window.createCloudClient = function () {
   const url = $('supabaseUrl').value.trim();
   const key = $('supabaseKey').value.trim();
@@ -29,8 +34,15 @@ window.createCloudClient = function () {
     cloudStatus('未設定', false);
     return null;
   }
-  TaxBookV2.state.client = window.supabase.createClient(url, key);
-  return TaxBookV2.state.client;
+  try {
+    TaxBookV2.state.client = window.supabase.createClient(url, key);
+    return TaxBookV2.state.client;
+  } catch (error) {
+    TaxBookV2.state.client = null;
+    cloudStatus('Supabase 設定錯誤', false);
+    alert(`Supabase 連線設定錯誤：${error.message}`);
+    return null;
+  }
 };
 
 window.refreshSession = async function () {
@@ -49,17 +61,41 @@ window.saveCloudConfig = async function () {
   alert('同步設定已儲存。');
 };
 
+window.explainAuthEmailError = function (error) {
+  const msg = String(error?.message || error || '未知錯誤');
+  const lower = msg.toLowerCase();
+  if (lower.includes('email address not authorized')) {
+    return '此 Email 不在 Supabase 專案團隊允許名單內。預設 SMTP 只寄給專案團隊成員；請改用專案團隊成員 Email，或在 Supabase 設定 Custom SMTP。';
+  }
+  if (lower.includes('rate limit') || lower.includes('too many')) {
+    return 'Supabase 寄信次數已達限制。請稍後再試，或設定 Custom SMTP。';
+  }
+  if (lower.includes('redirect') || lower.includes('url')) {
+    return `登入回跳網址可能未允許。請在 Supabase Auth URL Configuration 加入：${authRedirectUrl()}`;
+  }
+  return msg;
+};
+
 window.sendMagicLink = async function () {
   const client = TaxBookV2.state.client || createCloudClient();
   const email = $('syncEmail').value.trim();
   if (!client) return alert('請先填 Supabase Project URL 與 publishable/anon key。');
   if (!email) return alert('請輸入 Email。');
   saveSyncSettings();
+  cloudStatus('正在寄送登入信…', false);
   const result = await client.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${location.origin}${location.pathname}` }
+    options: {
+      emailRedirectTo: authRedirectUrl(),
+      shouldCreateUser: true
+    }
   });
-  alert(result.error ? `寄送失敗：${result.error.message}` : '登入連結已寄出，請到信箱點擊。');
+  if (result.error) {
+    cloudStatus('登入信寄送失敗', false);
+    return alert(`登入信寄送失敗：\n${explainAuthEmailError(result.error)}`);
+  }
+  cloudStatus('登入信已寄出', true);
+  alert(`登入連結已寄出。\n\n回跳網址：${authRedirectUrl()}\n\n請到信箱點擊登入連結。`);
 };
 
 window.signOutCloud = async function () {

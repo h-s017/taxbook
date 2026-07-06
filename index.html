@@ -132,6 +132,17 @@
       <article class="stat"><span>待補/待確認</span><strong id="missingDocs">0</strong></article>
     </section>
 
+    <section class="card" id="profitLossCard">
+      <div class="section-head">
+        <div>
+          <h2>三套損益分析</h2>
+          <p>外帳、內帳與內外合併分開計算；合併損益以每筆交易只計一次，避免「外帳＋內帳」資料重複加總。</p>
+        </div>
+      </div>
+      <div class="profitloss-grid" id="profitLossSummary"></div>
+      <div class="table-wrap"><table id="profitLossTable"></table></div>
+    </section>
+
     <section class="card" id="cashFlowAnalysisCard">
       <div class="section-head">
         <div>
@@ -168,5 +179,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
   <script src="cashflow.js"></script>
+  <script src="profitloss.js"></script>
 </body>
 </html>

@@ -66,12 +66,32 @@ window.renderCompanyUI = function () {
 
 window.loadCompanies = async function () {
   const state = TaxBookV2.state;
-  const result = await state.client
+  let companies = [];
+
+  const memberResult = await state.client
     .from('company_members')
-    .select('company_id,role,companies(id,name,ban,tax_mode)')
+    .select('company_id,role,companies(id,name,ban,tax_mode,owner_user_id)')
     .eq('user_id', state.user.id);
-  if (result.error) return alert(`公司資料讀取失敗：${result.error.message}`);
-  state.companies = (result.data || []).map(row => ({...row.companies, role: row.role})).filter(Boolean);
+
+  if (!memberResult.error) {
+    companies = (memberResult.data || [])
+      .map(row => row.companies ? {...row.companies, role:row.role} : null)
+      .filter(Boolean);
+  }
+
+  if (!companies.length) {
+    const ownerResult = await state.client
+      .from('companies')
+      .select('id,name,ban,tax_mode,owner_user_id')
+      .eq('owner_user_id', state.user.id)
+      .order('created_at', {ascending:true});
+    if (ownerResult.error && memberResult.error) {
+      return alert(`公司資料讀取失敗：${ownerResult.error.message}`);
+    }
+    companies = (ownerResult.data || []).map(c => ({...c, role:'owner'}));
+  }
+
+  state.companies = companies;
   renderCompanyUI();
   if (state.companies.length) {
     const saved = localStorage.getItem(TaxBookV2.keys.company);
@@ -86,12 +106,43 @@ window.createCompany = async function () {
   const name = $('newCompanyName').value.trim();
   if (!state.user) return alert('請先登入。');
   if (!name) return alert('請輸入公司名稱。');
-  const result = await state.client.rpc('create_company_with_defaults', {
-    p_name: name,
-    p_ban: $('newCompanyBan').value.trim() || null,
-    p_tax_mode: $('newCompanyTaxMode').value
+
+  const rpcResult = await state.client.rpc('create_company_with_defaults', {
+    p_name:name,
+    p_ban:$('newCompanyBan').value.trim() || null,
+    p_tax_mode:$('newCompanyTaxMode').value
   });
-  if (result.error) return alert(`建立公司失敗：${result.error.message}`);
+
+  if (rpcResult.error) {
+    const inserted = await state.client.from('companies').insert({
+      name,
+      ban:$('newCompanyBan').value.trim() || null,
+      tax_mode:$('newCompanyTaxMode').value,
+      owner_user_id:state.user.id
+    }).select().single();
+    if (inserted.error) return alert(`建立公司失敗：${inserted.error.message}`);
+
+    const companyId = inserted.data.id;
+    const cashRows = [
+      ['現金','cash'],['銀行帳戶','bank'],['信用卡','credit_card'],
+      ['LINE Pay','wallet'],['平台代收','platform'],['私人代墊','personal_advance']
+    ].map(([accountName,type]) => ({company_id:companyId,name:accountName,type}));
+    const accountRows = fallbackAccounts.map(a => ({
+      company_id:companyId,code:a.code,name:a.name,kind:a.kind,is_system:true
+    }));
+    const projectRows = ['一般營運','待分類'].map(projectName => ({company_id:companyId,name:projectName}));
+    const memberRow = {company_id:companyId,user_id:state.user.id,role:'owner'};
+
+    const results = await Promise.all([
+      state.client.from('cash_accounts').insert(cashRows),
+      state.client.from('accounting_accounts').insert(accountRows),
+      state.client.from('projects').insert(projectRows),
+      state.client.from('company_members').insert(memberRow)
+    ]);
+    const failed = results.find(r => r.error);
+    if (failed) alert(`公司已建立，但部分預設資料未完整建立：${failed.error.message}`);
+  }
+
   $('onboardingBox').hidden = true;
   await loadCompanies();
 };

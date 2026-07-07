@@ -3,7 +3,9 @@ window.loadCompanyData = async function () {
   if (!state.client || !state.currentCompany) return;
   const companyId = state.currentCompany.id;
   const [tx, ac, pr, ca] = await Promise.all([
-    state.client.from('transactions').select('*,attachments(file_name,mime_type,storage_path)').eq('company_id', companyId).is('deleted_at', null).order('date', {ascending:false}),
+    state.client.from('transactions')
+      .select('*,attachments(file_name,mime_type,storage_path),transaction_cash_flows(cash_account_id,status,direction,amount)')
+      .eq('company_id', companyId).is('deleted_at', null).order('date', {ascending:false}),
     state.client.from('accounting_accounts').select('*').eq('company_id', companyId).eq('is_active', true).order('code'),
     state.client.from('projects').select('*').eq('company_id', companyId).eq('is_active', true).order('name'),
     state.client.from('cash_accounts').select('*').eq('company_id', companyId).eq('is_active', true).order('name')
@@ -116,7 +118,8 @@ window.fillForm = function (raw) {
 window.uploadAttachment = async function (transactionId, file) {
   if (!file) return null;
   const state = TaxBookV2.state;
-  const path = `${state.currentCompany.id}/${state.user.id}/${transactionId}/${encodeURIComponent(file.name.replace(/[\\/]/g,'-'))}`;
+  const safeName = encodeURIComponent(file.name.replace(/[\\/]/g,'-'));
+  const path = `${state.user.id}/${state.currentCompany.id}/${transactionId}/${safeName}`;
   const up = await state.client.storage.from('receipts').upload(path, file, {upsert:true,contentType:file.type || 'application/octet-stream'});
   if (up.error) throw up.error;
   await state.client.from('attachments').delete().eq('transaction_id', transactionId);
@@ -130,7 +133,8 @@ window.uploadAttachment = async function (transactionId, file) {
 
 window.saveCashFlow = async function (entry) {
   const state = TaxBookV2.state;
-  await state.client.from('transaction_cash_flows').delete().eq('transaction_id', entry.id);
+  const deleted = await state.client.from('transaction_cash_flows').delete().eq('transaction_id', entry.id);
+  if (deleted.error) throw deleted.error;
   const settled_at = entry.cashStatus === 'paid' ? new Date().toISOString() : null;
   let rows = [];
   if (entry.kind === 'transfer') {
@@ -150,6 +154,14 @@ window.saveCashFlow = async function (entry) {
   if (result.error) throw result.error;
 };
 
+window.remoteIsNewer = async function (entry) {
+  const state = TaxBookV2.state;
+  if (!state.editingId || !entry.updatedAt) return false;
+  const result = await state.client.from('transactions').select('updated_at').eq('id', entry.id).eq('company_id', state.currentCompany.id).maybeSingle();
+  if (result.error || !result.data?.updated_at) return false;
+  return new Date(result.data.updated_at).getTime() > new Date(entry.updatedAt).getTime();
+};
+
 window.handleSubmit = async function (event) {
   event.preventDefault();
   const state=TaxBookV2.state;
@@ -160,19 +172,33 @@ window.handleSubmit = async function (event) {
   if (entry.kind === 'transfer' && (!entry.fromCashAccountId || !entry.toCashAccountId)) return alert('內部移轉需選擇轉出與轉入帳戶。');
   if (entry.kind === 'transfer' && entry.fromCashAccountId === entry.toCashAccountId) return alert('轉出與轉入帳戶不可相同。');
   const file=$('receiptFile').files[0];
+
   if (!navigator.onLine) {
     state.entries=state.editingId?state.entries.map(x=>x.id===entry.id?entry:x):[entry,...state.entries];
-    window.entries=state.entries;queueOp({type:'upsert',entry});saveCache();resetForm();render();
+    window.entries=state.entries;queueOp({type:'upsert',entry,status:'pending'});saveCache();resetForm();render();
+    if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
     return alert('目前離線，已存入本機待同步。');
   }
+
+  if (old && await remoteIsNewer(old)) {
+    const overwrite = confirm('雲端版本比目前本機編輯版本更新。\n\n按「確定」仍以本機修改覆蓋；按「取消」重新載入雲端版本。');
+    if (!overwrite) {
+      await loadCompanyData();
+      resetForm();
+      return;
+    }
+  }
+
   const result=await state.client.from('transactions').upsert(entryToDb(entry)).select().single();
   if (result.error) return alert(`儲存失敗：${result.error.message}`);
   try {
     if (file) entry.receipt=await uploadAttachment(entry.id,file);
     await saveCashFlow(entry);
   } catch (error) { return alert(`交易已儲存，但附件或現金流失敗：${error.message}`); }
+  entry.updatedAt = result.data.updated_at || entry.updatedAt;
   state.entries=state.editingId?state.entries.map(x=>x.id===entry.id?entry:x):[entry,...state.entries];
   window.entries=state.entries;saveCache();resetForm();render();
+  if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
 };
 
 window.handleTableClick = async function (event) {
@@ -191,7 +217,8 @@ window.handleTableClick = async function (event) {
     if (navigator.onLine) {
       const result=await state.client.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',id).eq('company_id',state.currentCompany.id);
       if (result.error) return alert(`刪除失敗：${result.error.message}`);
-    } else queueOp({type:'delete',id});
+    } else queueOp({type:'delete',id,status:'pending'});
     state.entries=state.entries.filter(x=>x.id!==id);window.entries=state.entries;saveCache();render();
+    if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
   }
 };

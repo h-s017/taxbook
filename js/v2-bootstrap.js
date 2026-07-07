@@ -13,6 +13,7 @@ window.updateSyncQueueStatus = function () {
   const pending = queue.length - errors - conflicts;
   el.textContent = `待同步 ${pending} 筆｜失敗 ${errors} 筆｜衝突 ${conflicts} 筆`;
 };
+window.updateSyncStatusUI = window.updateSyncQueueStatus;
 
 window.initTaxBookV2 = async function () {
   injectCompanyUI();

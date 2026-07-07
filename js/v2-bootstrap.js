@@ -1,3 +1,19 @@
+window.updateSyncQueueStatus = function () {
+  let el = $('syncQueueStatus');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'syncQueueStatus';
+    el.className = 'sync-note';
+    const card = $('cloudStatus')?.closest('.sync-card');
+    card?.appendChild(el);
+  }
+  const queue = pendingOps();
+  const errors = queue.filter(item => item.status === 'error').length;
+  const conflicts = queue.filter(item => item.status === 'conflict').length;
+  const pending = queue.length - errors - conflicts;
+  el.textContent = `待同步 ${pending} 筆｜失敗 ${errors} 筆｜衝突 ${conflicts} 筆`;
+};
+
 window.initTaxBookV2 = async function () {
   injectCompanyUI();
   loadSyncSettings();
@@ -7,6 +23,7 @@ window.initTaxBookV2 = async function () {
   updateCashAccountOptions();
   resetForm();
   renderCompanyUI();
+  updateSyncQueueStatus();
   createCloudClient();
   if (TaxBookV2.state.client) {
     await refreshSession();
@@ -25,9 +42,13 @@ window.initTaxBookV2 = async function () {
     render();
   }
   window.addEventListener('online', () => {
+    updateSyncQueueStatus();
     if (pendingOps().length) cloudStatus(`已連線｜${pendingOps().length} 筆待同步`, true);
   });
-  window.addEventListener('offline', () => cloudStatus('離線模式', false));
+  window.addEventListener('offline', () => {
+    updateSyncQueueStatus();
+    cloudStatus('離線模式', false);
+  });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 };
 

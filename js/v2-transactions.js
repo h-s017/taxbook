@@ -157,9 +157,33 @@ window.saveCashFlow = async function (entry) {
 window.remoteIsNewer = async function (entry) {
   const state = TaxBookV2.state;
   if (!state.editingId || !entry.updatedAt) return false;
-  const result = await state.client.from('transactions').select('updated_at').eq('id', entry.id).eq('company_id', state.currentCompany.id).maybeSingle();
+  let result;
+  try {
+    result = await state.client.from('transactions').select('updated_at').eq('id', entry.id).eq('company_id', state.currentCompany.id).maybeSingle();
+  } catch {
+    return false;
+  }
   if (result.error || !result.data?.updated_at) return false;
   return new Date(result.data.updated_at).getTime() > new Date(entry.updatedAt).getTime();
+};
+
+window.queueLocalEntry = function (entry) {
+  const state = TaxBookV2.state;
+  state.entries=state.editingId?state.entries.map(x=>x.id===entry.id?entry:x):[entry,...state.entries];
+  window.entries=state.entries;queueOp({type:'upsert',entry,status:'pending'});saveCache();resetForm();render();
+  if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
+};
+
+window.queueLocalDelete = function (id) {
+  const state = TaxBookV2.state;
+  queueOp({type:'delete',id,status:'pending'});
+  state.entries=state.entries.filter(x=>x.id!==id);window.entries=state.entries;saveCache();render();
+  if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
+};
+
+window.isCloudConnectionError = function (error) {
+  const msg = String(error?.message || error || '').toLowerCase();
+  return msg.includes('failed to fetch') || msg.includes('network') || msg.includes('offline') || msg.includes('load failed');
 };
 
 window.handleSubmit = async function (event) {
@@ -173,13 +197,6 @@ window.handleSubmit = async function (event) {
   if (entry.kind === 'transfer' && entry.fromCashAccountId === entry.toCashAccountId) return alert('轉出與轉入帳戶不可相同。');
   const file=$('receiptFile').files[0];
 
-  if (!navigator.onLine) {
-    state.entries=state.editingId?state.entries.map(x=>x.id===entry.id?entry:x):[entry,...state.entries];
-    window.entries=state.entries;queueOp({type:'upsert',entry,status:'pending'});saveCache();resetForm();render();
-    if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
-    return alert('目前離線，已存入本機待同步。');
-  }
-
   if (old && await remoteIsNewer(old)) {
     const overwrite = confirm('雲端版本比目前本機編輯版本更新。\n\n按「確定」仍以本機修改覆蓋；按「取消」重新載入雲端版本。');
     if (!overwrite) {
@@ -189,8 +206,20 @@ window.handleSubmit = async function (event) {
     }
   }
 
-  const result=await state.client.from('transactions').upsert(entryToDb(entry)).select().single();
-  if (result.error) return alert(`儲存失敗：${result.error.message}`);
+  let result;
+  try {
+    result=await state.client.from('transactions').upsert(entryToDb(entry)).select().single();
+  } catch (error) {
+    queueLocalEntry(entry);
+    return alert(`目前無法連上雲端，已存入本機待同步。${file ? '\n\n提醒：離線排隊不會保存附件檔，重新連線後請編輯此筆再補上附件。' : ''}`);
+  }
+  if (result.error) {
+    if (isCloudConnectionError(result.error)) {
+      queueLocalEntry(entry);
+      return alert(`目前無法連上雲端，已存入本機待同步。${file ? '\n\n提醒：離線排隊不會保存附件檔，重新連線後請編輯此筆再補上附件。' : ''}`);
+    }
+    return alert(`儲存失敗：${result.error.message}`);
+  }
   try {
     if (file) entry.receipt=await uploadAttachment(entry.id,file);
     await saveCashFlow(entry);
@@ -214,10 +243,21 @@ window.handleTableClick = async function (event) {
     return $('receiptDialog').showModal();
   }
   if (event.target.dataset.delete && confirm('確定刪除？此筆會採軟刪除保留歷史。')) {
-    if (navigator.onLine) {
+    let queuedDelete = false;
+    try {
       const result=await state.client.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',id).eq('company_id',state.currentCompany.id);
-      if (result.error) return alert(`刪除失敗：${result.error.message}`);
-    } else queueOp({type:'delete',id,status:'pending'});
+      if (result.error) {
+        if (isCloudConnectionError(result.error)) {
+          queueLocalDelete(id);
+          queuedDelete = true;
+        }
+        else return alert(`刪除失敗：${result.error.message}`);
+      }
+    } catch {
+      queueLocalDelete(id);
+      queuedDelete = true;
+    }
+    if (queuedDelete) return alert('目前無法連上雲端，已將刪除動作存入本機待同步。');
     state.entries=state.entries.filter(x=>x.id!==id);window.entries=state.entries;saveCache();render();
     if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
   }

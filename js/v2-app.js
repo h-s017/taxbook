@@ -1,5 +1,53 @@
-const taxBookBootstrap = document.createElement('script');
-taxBookBootstrap.src = 'js/v2-bootstrap.js';
-taxBookBootstrap.onload = () => console.info('TaxBook v2 bootstrap loaded');
-taxBookBootstrap.onerror = () => alert('TaxBook 啟動模組載入失敗，請重新整理頁面。');
-document.head.appendChild(taxBookBootstrap);
+window.saveBusinessSettings = async function () {
+  const state = TaxBookV2.state;
+  if (!state.user || !state.currentCompany || !roleCanEdit()) return;
+
+  const payload = {
+    name: $('bizName').value.trim(),
+    ban: $('bizBan').value.trim() || null,
+    tax_mode: $('taxMode').value
+  };
+  const result = await state.client
+    .from('companies')
+    .update(payload)
+    .eq('id', state.currentCompany.id);
+  if (result.error) return alert(`公司資料更新失敗：${result.error.message}`);
+
+  Object.assign(state.currentCompany, payload);
+  renderCompanyUI();
+};
+
+window.bindV2 = function () {
+  $('entryForm').addEventListener('submit', handleSubmit);
+  $('kind').addEventListener('change', () => {
+    updateCategoryOptions();
+    updateCashAccountOptions();
+  });
+
+  $('receiptFile').addEventListener('change', event => {
+    $('fileHint').textContent = event.target.files[0]?.name || '尚未選擇檔案';
+  });
+
+  $('resetFormBtn').onclick = resetForm;
+  $('entriesTable').addEventListener('click', handleTableClick);
+  $('searchInput').addEventListener('input', render);
+  $('bookFilter')?.addEventListener('change', render);
+  $('yearFilter').addEventListener('change', render);
+  ['bizName', 'bizBan', 'taxMode'].forEach(id => {
+    $(id)?.addEventListener('change', saveBusinessSettings);
+  });
+
+  $('exportCsvBtn').onclick = () => exportCsv('full');
+  $('exportTaxCsvBtn').onclick = () => exportCsv('tax');
+  $('exportInternalCsvBtn').onclick = () => exportCsv('internal');
+  $('exportJsonBtn').onclick = exportJson;
+  $('importJsonInput').onchange = event => importJson(event.target.files[0]);
+  $('printBtn').onclick = () => window.print();
+  $('closeDialog').onclick = () => $('receiptDialog').close();
+
+  $('saveCloudConfigBtn').onclick = saveCloudConfig;
+  $('sendMagicLinkBtn').onclick = sendMagicLink;
+  $('pushCloudBtn').onclick = pushCloud;
+  $('pullCloudBtn').onclick = pullCloud;
+  $('signOutBtn').onclick = signOutCloud;
+};

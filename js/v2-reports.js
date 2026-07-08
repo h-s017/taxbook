@@ -82,18 +82,34 @@ window.migrateLegacyData=async function(){
 
 window.pushCloud=async function(){
   const s=TaxBookV2.state;if(!s.user||!s.currentCompany)return alert('請先登入並選擇公司。');
-  const q=pendingOps();if(!q.length)return alert('沒有待同步資料。');let failed=[];
-  for(const op of q){
-    if(op.type==='delete'){const r=await s.client.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',op.id).eq('company_id',s.currentCompany.id);if(r.error)failed.push(op);}
-    else {
-      const entry=migrateEntry(op.entry);
-      const r=await s.client.from('transactions').upsert(entryToDb(entry));
-      if(r.error)failed.push(op);
-      else {
-        try{await saveCashFlow(entry);}catch(error){console.error(error);failed.push(op);}
+  const q=pendingOps();if(!q.length)return alert('沒有待同步資料。');let remaining=[];
+  for(const rawOp of q){
+    const op={...rawOp,status:'pending',error:null};
+    try{
+      if(op.type==='delete'){
+        const r=await s.client.from('transactions').update({deleted_at:new Date().toISOString()}).eq('id',op.id).eq('company_id',s.currentCompany.id);
+        if(r.error)remaining.push({...op,status:'error',error:r.error.message});
+        continue;
       }
+      const entry=migrateEntry(op.entry);
+      const remote=await s.client.from('transactions').select('updated_at').eq('id',entry.id).eq('company_id',s.currentCompany.id).maybeSingle();
+      if(remote.error){remaining.push({...op,status:'error',error:remote.error.message});continue;}
+      if(remote.data?.updated_at&&entry.updatedAt&&new Date(remote.data.updated_at).getTime()>new Date(entry.updatedAt).getTime()){
+        remaining.push({...op,status:'conflict',error:'Remote transaction is newer than the queued local edit.'});
+        continue;
+      }
+      const r=await s.client.from('transactions').upsert(entryToDb(entry)).select().single();
+      if(r.error){remaining.push({...op,status:'error',error:r.error.message});continue;}
+      entry.updatedAt=r.data?.updated_at||entry.updatedAt;
+      try{await saveCashFlow(entry);}catch(error){console.error(error);remaining.push({...op,status:'error',error:error.message});}
+    }catch(error){
+      remaining.push({...op,status:'error',error:error.message});
     }
   }
-  localStorage.setItem(pendingKey(),JSON.stringify(failed));await loadCompanyData();alert(failed.length?`仍有 ${failed.length} 筆同步失敗。`:'待同步資料已完成。');
+  localStorage.setItem(pendingKey(),JSON.stringify(remaining));
+  if(typeof updateSyncStatusUI==='function')updateSyncStatusUI();
+  await loadCompanyData();
+  const errors=remaining.filter(op=>op.status==='error').length,conflicts=remaining.filter(op=>op.status==='conflict').length;
+  alert(remaining.length?`同步未完成：${errors} 筆失敗，${conflicts} 筆衝突。`:'待同步資料已完成。');
 };
 window.pullCloud=async function(){if(!TaxBookV2.state.user||!TaxBookV2.state.currentCompany)return alert('請先登入並選擇公司。');await loadCompanyData();alert('已重新載入雲端資料。');};

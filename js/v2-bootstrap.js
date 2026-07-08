@@ -16,6 +16,9 @@ window.updateSyncQueueStatus = function () {
 window.updateSyncStatusUI = window.updateSyncQueueStatus;
 
 window.initTaxBookV2 = async function () {
+  if (typeof bindV2 !== 'function') {
+    throw new Error('TaxBook event binding module did not load.');
+  }
   injectCompanyUI();
   loadSyncSettings();
   bindV2();

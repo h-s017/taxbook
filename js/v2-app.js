@@ -47,6 +47,7 @@ window.bindV2 = function () {
 
   $('saveCloudConfigBtn').onclick = saveCloudConfig;
   $('sendMagicLinkBtn').onclick = sendMagicLink;
+  $('useMagicLinkBtn').onclick = usePastedMagicLink;
   $('pushCloudBtn').onclick = pushCloud;
   $('pullCloudBtn').onclick = pullCloud;
   $('signOutBtn').onclick = signOutCloud;

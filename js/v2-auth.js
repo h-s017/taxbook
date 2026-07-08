@@ -106,6 +106,43 @@ window.sendMagicLink = async function () {
   alert(`登入連結已寄出。\n\n回跳網址：${authRedirectUrl()}\n\n請到信箱點擊登入連結。`);
 };
 
+window.usePastedMagicLink = async function () {
+  const client = TaxBookV2.state.client || createCloudClient();
+  if (!client) return alert('請先確認 Supabase Project URL 與 publishable key。');
+
+  const value = $('magicLinkInput')?.value.trim();
+  if (!value) return alert('請貼上信件中的完整登入連結。');
+
+  let hash = '';
+  try {
+    hash = new URL(value).hash;
+  } catch {
+    hash = value.startsWith('#') ? value : '';
+  }
+
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken || !refreshToken) {
+    return alert('這個連結裡沒有可用的登入 token。請貼上信件中的完整連結。');
+  }
+
+  cloudStatus('正在使用貼上的連結登入…', false);
+  const result = await client.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken
+  });
+  if (result.error) {
+    cloudStatus('貼上連結登入失敗', false);
+    return alert(`貼上連結登入失敗：${result.error.message}`);
+  }
+
+  $('magicLinkInput').value = '';
+  await refreshSession();
+  cloudStatus(`已登入：${TaxBookV2.state.user?.email || ''}`, true);
+  alert('登入成功。');
+};
+
 window.signOutCloud = async function () {
   const state = TaxBookV2.state;
   if (state.client) await state.client.auth.signOut();

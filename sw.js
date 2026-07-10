@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hana-tax-book-v22';
+const CACHE_NAME = 'hana-tax-book-v23';
 const ASSETS = [
   './','./index.html','./styles.css','./manifest.webmanifest',
   './js/v2-core.js','./js/v2-data.js','./js/v2-auth.js','./js/v2-company.js',

@@ -46,8 +46,10 @@ window.bindV2 = function () {
   $('closeDialog').onclick = () => $('receiptDialog').close();
 
   $('saveCloudConfigBtn').onclick = saveCloudConfig;
-  $('sendMagicLinkBtn').onclick = sendMagicLink;
-  $('useMagicLinkBtn').onclick = usePastedMagicLink;
+  $('passwordLoginBtn').onclick = signInWithPassword;
+  $('passwordSignUpBtn').onclick = signUpWithPassword;
+  $('setPasswordBtn').onclick = updatePasswordForCurrentUser;
+  $('googleLoginBtn').onclick = () => alert('Google 登入尚未啟用。之後可接 Supabase Google OAuth。');
   $('pushCloudBtn').onclick = pushCloud;
   $('pullCloudBtn').onclick = pullCloud;
   $('signOutBtn').onclick = signOutCloud;

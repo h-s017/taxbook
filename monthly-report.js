@@ -96,12 +96,7 @@
 
     const tools = document.createElement('div');
     tools.className = 'entry-tools';
-    tools.innerHTML = `
-      <select id="summaryMonthFilter" aria-label="月報月份篩選">
-        <option value="all">全年</option>
-        ${Array.from({length:12},(_,i)=>`<option value="${i+1}">${String(i+1).padStart(2,'0')} 月</option>`).join('')}
-      </select>
-    `;
+    tools.innerHTML = `<select id="summaryMonthFilter" aria-label="月報月份篩選"><option value="all">全年</option>${Array.from({length:12},(_,i)=>`<option value="${i+1}">${String(i+1).padStart(2,'0')} 月</option>`).join('')}</select>`;
     head.appendChild(tools);
     document.getElementById('summaryMonthFilter').addEventListener('change', () => {
       if(typeof window.render === 'function') window.render();
@@ -156,6 +151,21 @@
     renderEntries(list);
   };
 
+  function loadSyncModule(){
+    if(document.getElementById('taxbookSyncLoader')) return;
+    const cdn = document.createElement('script');
+    cdn.id = 'taxbookSyncLoader';
+    cdn.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    cdn.onload = () => {
+      const script = document.createElement('script');
+      script.src = 'sync.js';
+      document.body.appendChild(script);
+    };
+    cdn.onerror = () => console.warn('Supabase CDN 載入失敗，同步功能暫不可用。');
+    document.body.appendChild(cdn);
+  }
+
   injectReportControls();
+  loadSyncModule();
   if(typeof originalRender === 'function') window.render();
 })();

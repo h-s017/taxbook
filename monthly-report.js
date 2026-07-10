@@ -25,7 +25,12 @@
     return list.filter(e => needsVoucherReview(e) || e.taxDeductible === 'review' || e.bookScope === 'review').length;
   }
 
-  function reportRows(list, filterFn, options = {}){
+  function entriesForSelectedPeriod(list){
+    const months = monthList();
+    return list.map(migrateEntry).filter(e => months.includes(Number(e.date.slice(5,7))));
+  }
+
+  function buildMonthlyRows(list, filterFn, options = {}){
     return monthList().map(month => {
       const mList = list.map(migrateEntry).filter(e => Number(e.date.slice(5,7)) === month);
       const scoped = mList.filter(filterFn).filter(e => e.kind === 'income' || e.kind === 'expense');
@@ -47,6 +52,35 @@
       }
       return `<tr>${cells.join('')}</tr>`;
     }).join('');
+  }
+
+  function buildTotalRow(list, filterFn, options = {}){
+    const periodList = entriesForSelectedPeriod(list);
+    const scoped = periodList.filter(filterFn).filter(e => e.kind === 'income' || e.kind === 'expense');
+    const income = incomeOf(scoped);
+    const expense = expenseOf(scoped);
+    const label = selectedReportMonth() === 'all' ? `${selectedYear()} 年度總計` : `${selectedYear()}/${String(Number(selectedReportMonth())).padStart(2,'0')} 選取月份總計`;
+    const cells = [
+      `<th>${label}</th>`,
+      `<th>${money(income)}</th>`,
+      `<th>${money(expense)}</th>`,
+      `<th>${money(income - expense)}</th>`
+    ];
+    if(options.taxColumns){
+      const inputTax = inputTaxOf(scoped);
+      const smallDeduct = Math.floor(inputTax * 0.1);
+      const review = reviewCount(periodList.filter(filterFn));
+      cells.push(`<th>${money(inputTax)}</th>`);
+      cells.push(`<th>${money(smallDeduct)}</th>`);
+      cells.push(`<th class="${review ? 'danger' : ''}">${review}</th>`);
+    }
+    return `<tr class="report-total-row">${cells.join('')}</tr>`;
+  }
+
+  function reportBody(list, filterFn, options = {}){
+    const rows = buildMonthlyRows(list, filterFn, options);
+    const total = buildTotalRow(list, filterFn, options);
+    return `${rows}${total}`;
   }
 
   function baseHeader(extra = ''){
@@ -73,6 +107,14 @@
       if(typeof window.render === 'function') window.render();
     });
 
+    const yearInput = document.getElementById('yearFilter');
+    if(yearInput && !yearInput.dataset.monthlyReportBound){
+      yearInput.dataset.monthlyReportBound = 'true';
+      yearInput.addEventListener('change', () => {
+        if(typeof window.render === 'function') window.render();
+      });
+    }
+
     const internalSection = document.createElement('section');
     internalSection.className = 'card';
     internalSection.innerHTML = `<div class="section-head"><div><h2>內帳月報</h2><p>只統計內帳使用的收入與支出；不含只列外帳的資料。</p></div></div><div class="table-wrap"><table id="internalSummaryTable"></table></div>`;
@@ -86,22 +128,22 @@
   }
 
   window.renderSummary = function(list){
-    const taxRows = reportRows(list, isTaxBook, {taxColumns:true});
-    const internalRows = reportRows(list, isInternalBook);
-    const combinedRows = reportRows(list, e => e.kind === 'income' || e.kind === 'expense');
+    const taxBody = reportBody(list, isTaxBook, {taxColumns:true});
+    const internalBody = reportBody(list, isInternalBook);
+    const combinedBody = reportBody(list, e => e.kind === 'income' || e.kind === 'expense');
 
     const summary = document.getElementById('summaryTable');
     const internal = document.getElementById('internalSummaryTable');
     const combined = document.getElementById('combinedSummaryTable');
 
     if(summary){
-      summary.innerHTML = `${baseHeader('<th>進項稅額</th><th>小規模扣減估算</th><th>待確認</th>')}<tbody>${taxRows || '<tr><td colspan="7">尚無資料</td></tr>'}</tbody>`;
+      summary.innerHTML = `${baseHeader('<th>進項稅額</th><th>小規模扣減估算</th><th>待確認</th>')}<tbody>${taxBody || '<tr><td colspan="7">尚無資料</td></tr>'}</tbody>`;
     }
     if(internal){
-      internal.innerHTML = `${baseHeader()}<tbody>${internalRows || '<tr><td colspan="4">尚無資料</td></tr>'}</tbody>`;
+      internal.innerHTML = `${baseHeader()}<tbody>${internalBody || '<tr><td colspan="4">尚無資料</td></tr>'}</tbody>`;
     }
     if(combined){
-      combined.innerHTML = `${baseHeader()}<tbody>${combinedRows || '<tr><td colspan="4">尚無資料</td></tr>'}</tbody>`;
+      combined.innerHTML = `${baseHeader()}<tbody>${combinedBody || '<tr><td colspan="4">尚無資料</td></tr>'}</tbody>`;
     }
   };
 

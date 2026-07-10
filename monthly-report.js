@@ -1,30 +1,64 @@
 (() => {
-  const originalRenderSummary = window.renderSummary;
-  const originalRender = window.render;
-
   function selectedReportMonth(){
     const el = document.getElementById('summaryMonthFilter');
     return el ? el.value : 'all';
   }
 
-  function getAmount(list, kind){
-    return list.filter(e => e.kind === kind).reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+  function monthList(){
+    const value = selectedReportMonth();
+    return value === 'all' ? Array.from({length:12},(_,i)=>i+1) : [Number(value)];
   }
 
-  function getTax(list){
+  function incomeOf(list){
+    return list.filter(e => e.kind === 'income').reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+  }
+
+  function expenseOf(list){
+    return list.filter(e => e.kind === 'expense').reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+  }
+
+  function inputTaxOf(list){
     return list.filter(e => e.kind === 'expense').reduce((sum, e) => sum + Number(e.taxAmount || 0), 0);
   }
 
-  function profitOf(list){
-    return getAmount(list, 'income') - getAmount(list, 'expense');
+  function reviewCount(list){
+    return list.filter(e => needsVoucherReview(e) || e.taxDeductible === 'review' || e.bookScope === 'review').length;
   }
 
-  function injectSummaryMonthFilter(){
+  function reportRows(list, filterFn, options = {}){
+    return monthList().map(month => {
+      const mList = list.map(migrateEntry).filter(e => Number(e.date.slice(5,7)) === month);
+      const scoped = mList.filter(filterFn).filter(e => e.kind === 'income' || e.kind === 'expense');
+      const income = incomeOf(scoped);
+      const expense = expenseOf(scoped);
+      const cells = [
+        `<td>${selectedYear()}/${String(month).padStart(2,'0')}</td>`,
+        `<td>${money(income)}</td>`,
+        `<td>${money(expense)}</td>`,
+        `<td>${money(income - expense)}</td>`
+      ];
+      if(options.taxColumns){
+        const inputTax = inputTaxOf(scoped);
+        const smallDeduct = Math.floor(inputTax * 0.1);
+        const review = reviewCount(mList.filter(filterFn));
+        cells.push(`<td>${money(inputTax)}</td>`);
+        cells.push(`<td>${money(smallDeduct)}</td>`);
+        cells.push(`<td class="${review ? 'danger' : ''}">${review}</td>`);
+      }
+      return `<tr>${cells.join('')}</tr>`;
+    }).join('');
+  }
+
+  function baseHeader(extra = ''){
+    return `<thead><tr><th>月份</th><th>收入</th><th>支出</th><th>損益</th>${extra}</tr></thead>`;
+  }
+
+  function injectReportControls(){
     if(document.getElementById('summaryMonthFilter')) return;
     const summaryTable = document.getElementById('summaryTable');
     const card = summaryTable?.closest('.card');
     const head = card?.querySelector('.section-head');
-    if(!head) return;
+    if(!head || !card) return;
 
     const tools = document.createElement('div');
     tools.className = 'entry-tools';
@@ -38,57 +72,40 @@
     document.getElementById('summaryMonthFilter').addEventListener('change', () => {
       if(typeof window.render === 'function') window.render();
     });
+
+    const internalSection = document.createElement('section');
+    internalSection.className = 'card';
+    internalSection.innerHTML = `<div class="section-head"><div><h2>內帳月報</h2><p>只統計內帳使用的收入與支出；不含只列外帳的資料。</p></div></div><div class="table-wrap"><table id="internalSummaryTable"></table></div>`;
+
+    const combinedSection = document.createElement('section');
+    combinedSection.className = 'card';
+    combinedSection.innerHTML = `<div class="section-head"><div><h2>內外帳合計月報</h2><p>統計全部收入與支出；每筆交易只計一次，避免外帳＋內帳重複加總。</p></div></div><div class="table-wrap"><table id="combinedSummaryTable"></table></div>`;
+
+    card.after(combinedSection);
+    card.after(internalSection);
   }
 
   window.renderSummary = function(list){
-    const monthFilter = selectedReportMonth();
-    const months = monthFilter === 'all' ? Array.from({length:12},(_,i)=>i+1) : [Number(monthFilter)];
+    const taxRows = reportRows(list, isTaxBook, {taxColumns:true});
+    const internalRows = reportRows(list, isInternalBook);
+    const combinedRows = reportRows(list, e => e.kind === 'income' || e.kind === 'expense');
 
-    const rows = months.map(month => {
-      const mList = list.map(migrateEntry).filter(e => Number(e.date.slice(5,7)) === month);
-      const taxList = mList.filter(isTaxBook).filter(e => e.kind === 'income' || e.kind === 'expense');
-      const internalList = mList.filter(isInternalBook).filter(e => e.kind === 'income' || e.kind === 'expense');
-      const combinedList = mList.filter(e => e.kind === 'income' || e.kind === 'expense');
+    const summary = document.getElementById('summaryTable');
+    const internal = document.getElementById('internalSummaryTable');
+    const combined = document.getElementById('combinedSummaryTable');
 
-      const taxIncome = getAmount(taxList, 'income');
-      const taxExpense = getAmount(taxList, 'expense');
-      const internalIncome = getAmount(internalList, 'income');
-      const internalExpense = getAmount(internalList, 'expense');
-      const combinedIncome = getAmount(combinedList, 'income');
-      const combinedExpense = getAmount(combinedList, 'expense');
-      const inputTax = getTax(taxList);
-      const smallDeduct = Math.floor(inputTax * 0.1);
-      const review = mList.filter(e => needsVoucherReview(e) || e.taxDeductible === 'review' || e.bookScope === 'review').length;
-
-      return `<tr>
-        <td>${selectedYear()}/${String(month).padStart(2,'0')}</td>
-        <td>${money(taxIncome)}</td><td>${money(taxExpense)}</td><td>${money(taxIncome - taxExpense)}</td>
-        <td>${money(internalIncome)}</td><td>${money(internalExpense)}</td><td>${money(internalIncome - internalExpense)}</td>
-        <td>${money(combinedIncome)}</td><td>${money(combinedExpense)}</td><td>${money(combinedIncome - combinedExpense)}</td>
-        <td>${money(inputTax)}</td><td>${money(smallDeduct)}</td><td class="${review ? 'danger' : ''}">${review}</td>
-      </tr>`;
-    }).join('');
-
-    const target = document.getElementById('summaryTable');
-    if(!target) return originalRenderSummary?.(list);
-    target.innerHTML = `<thead>
-      <tr>
-        <th rowspan="2">月份</th>
-        <th colspan="3">外帳</th>
-        <th colspan="3">內帳</th>
-        <th colspan="3">內外合併</th>
-        <th rowspan="2">進項稅額</th>
-        <th rowspan="2">小規模扣減估算</th>
-        <th rowspan="2">待確認</th>
-      </tr>
-      <tr>
-        <th>收入</th><th>支出</th><th>損益</th>
-        <th>收入</th><th>支出</th><th>損益</th>
-        <th>收入</th><th>支出</th><th>損益</th>
-      </tr>
-    </thead><tbody>${rows || '<tr><td colspan="13">尚無資料</td></tr>'}</tbody>`;
+    if(summary){
+      summary.innerHTML = `${baseHeader('<th>進項稅額</th><th>小規模扣減估算</th><th>待確認</th>')}<tbody>${taxRows || '<tr><td colspan="7">尚無資料</td></tr>'}</tbody>`;
+    }
+    if(internal){
+      internal.innerHTML = `${baseHeader()}<tbody>${internalRows || '<tr><td colspan="4">尚無資料</td></tr>'}</tbody>`;
+    }
+    if(combined){
+      combined.innerHTML = `${baseHeader()}<tbody>${combinedRows || '<tr><td colspan="4">尚無資料</td></tr>'}</tbody>`;
+    }
   };
 
+  const originalRender = window.render;
   window.render = function(){
     const list = getVisibleEntries();
     renderStats(list);
@@ -97,6 +114,6 @@
     renderEntries(list);
   };
 
-  injectSummaryMonthFilter();
-  if(typeof window.render === 'function') window.render();
+  injectReportControls();
+  if(typeof originalRender === 'function') window.render();
 })();

@@ -76,9 +76,8 @@ window.explainPasswordAuthError = function (error) {
   const msg = String(error?.message || error || '未知錯誤');
   const lower = msg.toLowerCase();
   if (lower.includes('invalid login credentials')) return 'Email 或密碼錯誤。';
-  if (lower.includes('email not confirmed')) return '此帳號尚未完成 Email 確認。';
+  if (lower.includes('email not confirmed')) return '此帳號尚未完成 Email 確認，請由管理端處理帳號狀態。';
   if (lower.includes('password should be at least')) return '密碼長度不足，請至少使用 6 個字元。';
-  if (lower.includes('user already registered')) return '此 Email 已存在。請直接登入；若此帳號以前只用 Magic Link，需先在已登入狀態設定密碼，或由管理端協助重設。';
   return msg;
 };
 
@@ -101,35 +100,11 @@ window.signInWithPassword = async function () {
   cloudStatus(`已登入：${TaxBookV2.state.user?.email || email}`, true);
 };
 
-window.signUpWithPassword = async function () {
-  const client = TaxBookV2.state.client || createCloudClient();
-  const {email,password} = authCredentials();
-  if (!client) return alert('請先確認 Supabase Project URL 與 publishable key。');
-  if (!email) return alert('請輸入 Email。');
-  if (password.length < 6) return alert('密碼至少需要 6 個字元。');
-  saveSyncSettings();
-  cloudStatus('正在建立帳號…', false);
-  const result = await client.auth.signUp({email,password});
-  if (result.error) {
-    cloudStatus('建立帳號失敗', false);
-    return alert(`建立帳號失敗：${explainPasswordAuthError(result.error)}`);
-  }
-  if ($('syncPassword')) $('syncPassword').value = '';
-  if (result.data?.session) {
-    TaxBookV2.state.user = result.data.user;
-    await refreshSession();
-    cloudStatus(`已登入：${result.data.user?.email || email}`, true);
-    return alert('帳號建立完成並已登入。');
-  }
-  cloudStatus('帳號已建立，待 Email 確認', false);
-  alert('帳號已建立。若 Supabase 專案要求 Email 確認，請先完成確認後再用密碼登入。');
-};
-
 window.updatePasswordForCurrentUser = async function () {
   const client = TaxBookV2.state.client || createCloudClient();
   const password = $('syncPassword')?.value || '';
   if (!client) return alert('Supabase 尚未設定。');
-  if (!TaxBookV2.state.user) return alert('請先登入後再設定新密碼。');
+  if (!TaxBookV2.state.user) return alert('請先登入後再變更密碼。');
   if (password.length < 6) return alert('新密碼至少需要 6 個字元。');
   const result = await client.auth.updateUser({password});
   if (result.error) return alert(`密碼更新失敗：${result.error.message}`);

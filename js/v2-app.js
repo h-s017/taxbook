@@ -47,9 +47,7 @@ window.bindV2 = function () {
 
   $('saveCloudConfigBtn').onclick = saveCloudConfig;
   $('passwordLoginBtn').onclick = signInWithPassword;
-  $('passwordSignUpBtn').onclick = signUpWithPassword;
   $('setPasswordBtn').onclick = updatePasswordForCurrentUser;
-  $('googleLoginBtn').onclick = () => alert('Google 登入尚未啟用。之後可接 Supabase Google OAuth。');
   $('pushCloudBtn').onclick = pushCloud;
   $('pullCloudBtn').onclick = pullCloud;
   $('signOutBtn').onclick = signOutCloud;

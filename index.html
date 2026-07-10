@@ -48,7 +48,7 @@
       <div class="section-head">
         <div>
           <h2>帳號登入與雲端同步</h2>
-          <p>主要登入改為 Email + 密碼。Google 登入保留為後續備援方案。Supabase 為主要資料來源。</p>
+          <p>私人記帳工具。僅提供既有帳號使用 Email + 密碼登入，不開放前台自行註冊。</p>
         </div>
         <span id="cloudStatus" class="pill">未設定</span>
       </div>
@@ -58,9 +58,7 @@
       </div>
       <div class="form-actions sync-actions">
         <button id="passwordLoginBtn" type="button" class="primary">登入</button>
-        <button id="passwordSignUpBtn" type="button">建立帳號</button>
-        <button id="setPasswordBtn" type="button">設定新密碼</button>
-        <button id="googleLoginBtn" type="button">Google 登入（之後開放）</button>
+        <button id="setPasswordBtn" type="button">變更密碼（需已登入）</button>
         <button id="signOutBtn" type="button">登出</button>
       </div>
       <details>
@@ -75,7 +73,7 @@
           <button id="pullCloudBtn" type="button">重新載入雲端</button>
         </div>
       </details>
-      <p class="sync-note">既有 Magic Link 帳號若尚未設定密碼，需先在已登入狀態按「設定新密碼」，之後即可直接使用 Email + 密碼登入。</p>
+      <p class="sync-note">既有帳號若尚未設定密碼，請由已登入 session 變更密碼，或由 Supabase 管理端協助處理。此頁不建立新帳號，也不使用 Magic Link。</p>
     </section>
 
     <section class="card">

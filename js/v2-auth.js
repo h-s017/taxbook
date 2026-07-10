@@ -30,10 +30,6 @@ window.cloudStatus = function (text, ok) {
   el.className = ok ? 'pill cloud-ok' : 'pill';
 };
 
-window.authRedirectUrl = function () {
-  return 'https://h-s017.github.io/taxbook/';
-};
-
 window.createCloudClient = function () {
   const url = $('supabaseUrl').value.trim();
   const key = $('supabaseKey').value.trim();
@@ -69,78 +65,76 @@ window.saveCloudConfig = async function () {
   alert('同步設定已儲存。');
 };
 
-window.explainAuthEmailError = function (error) {
+window.authCredentials = function () {
+  return {
+    email: $('syncEmail').value.trim(),
+    password: $('syncPassword')?.value || ''
+  };
+};
+
+window.explainPasswordAuthError = function (error) {
   const msg = String(error?.message || error || '未知錯誤');
   const lower = msg.toLowerCase();
-  if (lower.includes('email address not authorized')) {
-    return '此 Email 不在 Supabase 專案允許名單內。請改用專案成員 Email，或設定 Custom SMTP。';
-  }
-  if (lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Supabase 寄信次數已達限制。TaxBook 已切換到新的 active project；請重新整理後再試。';
-  }
-  if (lower.includes('redirect') || lower.includes('url')) {
-    return `登入回跳網址可能未允許。請在 Supabase Auth URL Configuration 加入：${authRedirectUrl()}`;
-  }
+  if (lower.includes('invalid login credentials')) return 'Email 或密碼錯誤。';
+  if (lower.includes('email not confirmed')) return '此帳號尚未完成 Email 確認。';
+  if (lower.includes('password should be at least')) return '密碼長度不足，請至少使用 6 個字元。';
+  if (lower.includes('user already registered')) return '此 Email 已存在。請直接登入；若此帳號以前只用 Magic Link，需先在已登入狀態設定密碼，或由管理端協助重設。';
   return msg;
 };
 
-window.sendMagicLink = async function () {
+window.signInWithPassword = async function () {
   const client = TaxBookV2.state.client || createCloudClient();
-  const email = $('syncEmail').value.trim();
+  const {email,password} = authCredentials();
   if (!client) return alert('請先確認 Supabase Project URL 與 publishable key。');
   if (!email) return alert('請輸入 Email。');
+  if (!password) return alert('請輸入密碼。');
   saveSyncSettings();
-  cloudStatus('正在寄送登入信…', false);
-  const result = await client.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: authRedirectUrl(),
-      shouldCreateUser: true
-    }
-  });
+  cloudStatus('正在登入…', false);
+  const result = await client.auth.signInWithPassword({email,password});
   if (result.error) {
-    cloudStatus('登入信寄送失敗', false);
-    return alert(`登入信寄送失敗：\n${explainAuthEmailError(result.error)}`);
+    cloudStatus('登入失敗', false);
+    return alert(`登入失敗：${explainPasswordAuthError(result.error)}`);
   }
-  cloudStatus('登入信已寄出', true);
-  alert(`登入連結已寄出。\n\n回跳網址：${authRedirectUrl()}\n\n請到信箱點擊登入連結。`);
+  TaxBookV2.state.user = result.data?.user || null;
+  if ($('syncPassword')) $('syncPassword').value = '';
+  await refreshSession();
+  cloudStatus(`已登入：${TaxBookV2.state.user?.email || email}`, true);
 };
 
-window.usePastedMagicLink = async function () {
+window.signUpWithPassword = async function () {
   const client = TaxBookV2.state.client || createCloudClient();
+  const {email,password} = authCredentials();
   if (!client) return alert('請先確認 Supabase Project URL 與 publishable key。');
-
-  const value = $('magicLinkInput')?.value.trim();
-  if (!value) return alert('請貼上信件中的完整登入連結。');
-
-  let hash = '';
-  try {
-    hash = new URL(value).hash;
-  } catch {
-    hash = value.startsWith('#') ? value : '';
-  }
-
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
-  if (!accessToken || !refreshToken) {
-    return alert('這個連結裡沒有可用的登入 token。請貼上信件中的完整連結。');
-  }
-
-  cloudStatus('正在使用貼上的連結登入…', false);
-  const result = await client.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken
-  });
+  if (!email) return alert('請輸入 Email。');
+  if (password.length < 6) return alert('密碼至少需要 6 個字元。');
+  saveSyncSettings();
+  cloudStatus('正在建立帳號…', false);
+  const result = await client.auth.signUp({email,password});
   if (result.error) {
-    cloudStatus('貼上連結登入失敗', false);
-    return alert(`貼上連結登入失敗：${result.error.message}`);
+    cloudStatus('建立帳號失敗', false);
+    return alert(`建立帳號失敗：${explainPasswordAuthError(result.error)}`);
   }
+  if ($('syncPassword')) $('syncPassword').value = '';
+  if (result.data?.session) {
+    TaxBookV2.state.user = result.data.user;
+    await refreshSession();
+    cloudStatus(`已登入：${result.data.user?.email || email}`, true);
+    return alert('帳號建立完成並已登入。');
+  }
+  cloudStatus('帳號已建立，待 Email 確認', false);
+  alert('帳號已建立。若 Supabase 專案要求 Email 確認，請先完成確認後再用密碼登入。');
+};
 
-  $('magicLinkInput').value = '';
-  await refreshSession();
-  cloudStatus(`已登入：${TaxBookV2.state.user?.email || ''}`, true);
-  alert('登入成功。');
+window.updatePasswordForCurrentUser = async function () {
+  const client = TaxBookV2.state.client || createCloudClient();
+  const password = $('syncPassword')?.value || '';
+  if (!client) return alert('Supabase 尚未設定。');
+  if (!TaxBookV2.state.user) return alert('請先登入後再設定新密碼。');
+  if (password.length < 6) return alert('新密碼至少需要 6 個字元。');
+  const result = await client.auth.updateUser({password});
+  if (result.error) return alert(`密碼更新失敗：${result.error.message}`);
+  $('syncPassword').value = '';
+  alert('密碼已更新。之後可直接使用 Email + 密碼登入。');
 };
 
 window.signOutCloud = async function () {

@@ -149,7 +149,7 @@
       </div>
     </section>
 
-    <section class="card"><div class="section-head"><div><h2>月報與申報檢查</h2><p>外帳統計排除只列內帳資料；待確認另外標示。</p></div><button id="printBtn">列印月報</button></div><div class="table-wrap"><table id="summaryTable"></table></div></section>
+    <section class="card"><div class="section-head"><div><h2>月報與申報檢查</h2><p>同時顯示外帳、內帳與內外合併損益；可切換全年或單月。</p></div><button id="printBtn">列印月報</button></div><div class="table-wrap"><table id="summaryTable"></table></div></section>
     <section class="card"><div class="section-head"><div><h2>會計科目彙總</h2><p>依外帳可列帳資料彙總。</p></div></div><div class="table-wrap"><table id="accountSummaryTable"></table></div></section>
     <section class="card"><div class="section-head"><div><h2>流水帳</h2><p>資料保存在目前瀏覽器；點「檢視」可開啟本機附件。</p></div><div class="entry-tools"><select id="bookFilter" aria-label="帳務篩選"><option value="all">全部帳務</option><option value="tax">外帳</option><option value="internal">內帳</option><option value="review">待確認</option></select><input id="searchInput" placeholder="搜尋日期、科目、分類、對象、備註…"></div></div><div class="table-wrap"><table id="entriesTable"></table></div></section>
   </main>
@@ -158,6 +158,7 @@
   <footer><p>此工具僅作記帳與憑證整理，不取代會計師或國稅局核定。外帳應以真實交易與合法憑證為準。</p></footer>
 
   <script src="app.js"></script>
+  <script src="monthly-report.js"></script>
   <script src="cashflow.js"></script>
   <script src="profitloss.js"></script>
 </body>

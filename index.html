@@ -13,7 +13,7 @@
     <div>
       <p class="eyebrow">HANA SCENT ARTIST</p>
       <h1>此域｜報稅記帳簿</h1>
-      <p class="sub">同一筆交易，同時保留外帳申報欄位與內帳經營標籤。Supabase 為主要資料來源，可跨手機與電腦同步。</p>
+      <p class="sub">資料只保存在目前瀏覽器。流水帳使用 localStorage，附件使用 IndexedDB；GitHub Pages 只提供程式頁面。</p>
     </div>
     <div class="hero-actions">
       <button id="exportCsvBtn" class="primary">匯出完整 CSV</button>
@@ -44,37 +44,27 @@
       </div>
     </section>
 
-    <section class="card sync-card">
+    <section class="card">
       <div class="section-head">
         <div>
-          <h2>帳號登入與雲端同步</h2>
-          <p>私人記帳工具。僅提供既有帳號使用 Email + 密碼登入，不開放前台自行註冊。</p>
+          <h2>本機資料模式</h2>
+          <p>不需登入、不連 Supabase。更換瀏覽器、清除網站資料或更換裝置前，請先匯出 JSON 備份。</p>
         </div>
-        <span id="cloudStatus" class="pill">未設定</span>
+        <span class="pill">Local only</span>
       </div>
-      <div class="grid two">
-        <label>登入 Email<input id="syncEmail" type="email" autocomplete="username" placeholder="你的 email"></label>
-        <label>密碼<input id="syncPassword" type="password" autocomplete="current-password" placeholder="至少 6 個字元"></label>
-      </div>
-      <div class="form-actions sync-actions">
-        <button id="passwordLoginBtn" type="button" class="primary">登入</button>
-        <button id="setPasswordBtn" type="button">變更密碼（需已登入）</button>
-        <button id="signOutBtn" type="button">登出</button>
-      </div>
-      <details>
-        <summary>進階連線設定</summary>
-        <div class="grid two">
-          <label>Supabase Project URL<input id="supabaseUrl" placeholder="https://xxxx.supabase.co"></label>
-          <label>Supabase publishable / anon key<input id="supabaseKey" placeholder="publishable 或 anon key"></label>
-        </div>
-        <div class="form-actions sync-actions">
-          <button id="saveCloudConfigBtn" type="button">儲存連線設定</button>
-          <button id="pushCloudBtn" type="button">同步待處理資料</button>
-          <button id="pullCloudBtn" type="button">重新載入雲端</button>
-        </div>
-      </details>
-      <p class="sync-note">既有帳號若尚未設定密碼，請由已登入 session 變更密碼，或由 Supabase 管理端協助處理。此頁不建立新帳號，也不使用 Magic Link。</p>
     </section>
+
+    <div hidden aria-hidden="true">
+      <span id="cloudStatus"></span>
+      <input id="supabaseUrl" value="">
+      <input id="supabaseKey" value="">
+      <input id="syncEmail" value="">
+      <button id="saveCloudConfigBtn" type="button"></button>
+      <button id="sendMagicLinkBtn" type="button"></button>
+      <button id="pushCloudBtn" type="button"></button>
+      <button id="pullCloudBtn" type="button"></button>
+      <button id="signOutBtn" type="button"></button>
+    </div>
 
     <section class="card">
       <h2>新增一筆</h2>
@@ -161,22 +151,14 @@
 
     <section class="card"><div class="section-head"><div><h2>月報與申報檢查</h2><p>外帳統計排除只列內帳資料；待確認另外標示。</p></div><button id="printBtn">列印月報</button></div><div class="table-wrap"><table id="summaryTable"></table></div></section>
     <section class="card"><div class="section-head"><div><h2>會計科目彙總</h2><p>依外帳可列帳資料彙總。</p></div></div><div class="table-wrap"><table id="accountSummaryTable"></table></div></section>
-    <section class="card"><div class="section-head"><div><h2>流水帳</h2><p>交易採逐筆 Supabase 儲存，刪除使用 soft delete。</p></div><div class="entry-tools"><select id="bookFilter" aria-label="帳務篩選"><option value="all">全部帳務</option><option value="tax">外帳</option><option value="internal">內帳</option><option value="review">待確認</option></select><input id="searchInput" placeholder="搜尋日期、科目、分類、對象、備註…"></div></div><div class="table-wrap"><table id="entriesTable"></table></div></section>
+    <section class="card"><div class="section-head"><div><h2>流水帳</h2><p>資料保存在目前瀏覽器；點「檢視」可開啟本機附件。</p></div><div class="entry-tools"><select id="bookFilter" aria-label="帳務篩選"><option value="all">全部帳務</option><option value="tax">外帳</option><option value="internal">內帳</option><option value="review">待確認</option></select><input id="searchInput" placeholder="搜尋日期、科目、分類、對象、備註…"></div></div><div class="table-wrap"><table id="entriesTable"></table></div></section>
   </main>
 
   <dialog id="receiptDialog"><button id="closeDialog" class="close">×</button><div id="receiptPreview"></div></dialog>
   <footer><p>此工具僅作記帳與憑證整理，不取代會計師或國稅局核定。外帳應以真實交易與合法憑證為準。</p></footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/v2-core.js"></script>
-  <script src="js/v2-data.js"></script>
-  <script src="js/v2-auth.js"></script>
-  <script src="js/v2-company.js"></script>
-  <script src="js/v2-transactions.js"></script>
-  <script src="js/v2-reports.js"></script>
+  <script src="app.js"></script>
   <script src="cashflow.js"></script>
   <script src="profitloss.js"></script>
-  <script src="js/v2-app.js"></script>
-  <script src="js/v2-bootstrap.js"></script>
 </body>
 </html>

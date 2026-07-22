@@ -53,6 +53,16 @@
       <tbody>${body || '<tr><td colspan="5">尚無資料</td></tr>'}</tbody>`;
   }
 
+  function renderEntriesWithCashStatus(list) {
+    const rows = list.map(raw => {
+      const e = migrateEntry(raw);
+      const cashLabel = statusLabels[e.cashStatus] || e.cashStatus || '未設定';
+      const cashClass = e.cashStatus === 'payable' ? 'danger' : '';
+      return `<tr><td>${html(e.date)}</td><td><span class="pill">${e.kind === 'income' ? '收入' : e.kind === 'expense' ? '支出' : e.kind === 'asset' ? '資產' : '移轉'}</span></td><td>${e.bookScope === 'both' ? '外＋內' : e.bookScope === 'tax' ? '外帳' : e.bookScope === 'internal' ? '內帳' : '待確認'}</td><td>${html(e.accountCode)} ${html(e.accountName || accountName(e.accountCode))}</td><td>${html(e.internalTag || '-')}</td><td>${html(e.counterparty || '-')}</td><td>${html(e.voucherType)}</td><td>${money(e.grossAmount)}</td><td class="${cashClass}">${html(cashLabel)}</td><td>${e.receipt ? `<button class="link-btn" data-view="${html(e.id)}">檢視</button>` : '<span class="danger">未附</span>'}</td><td><button class="link-btn" data-edit="${html(e.id)}">編輯</button> ｜ <button class="link-btn danger" data-delete="${html(e.id)}">刪除</button></td></tr>`;
+    }).join('');
+    document.getElementById('entriesTable').innerHTML = `<thead><tr><th>日期</th><th>類型</th><th>帳務</th><th>會計科目</th><th>內帳標籤</th><th>對象</th><th>憑證</th><th>金額</th><th>現金流狀態</th><th>附件</th><th>操作</th></tr></thead><tbody>${rows || '<tr><td colspan="11">尚無資料</td></tr>'}</tbody>`;
+  }
+
   function renderCashFlow() {
     const list = pickEntries();
 
@@ -89,6 +99,8 @@
     if (statusTable) statusTable.innerHTML = tableHtml(byStatus, '現金流狀態');
     if (paymentTable) paymentTable.innerHTML = tableHtml(byPayment, '付款方式');
   }
+
+  renderEntries = renderEntriesWithCashStatus;
 
   const originalRender = render;
   render = function patchedRender() {

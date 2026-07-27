@@ -100,6 +100,29 @@ th,td{
 th{background:#f2eee6;color:#504940;font-weight:700}
 tr:last-child td{border-bottom:none}
 .pill{display:inline-block;border-radius:999px;padding:4px 9px;font-size:13.5px;background:#eee8dd}
+.pill.ok{background:#dfeadd;color:#233f2d}
+.screenshot-card textarea{margin-top:10px}
+.screenshot-actions{align-items:end}
+.draft-preview{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin-top:14px;
+}
+.draft-preview span{
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#fbfaf6;
+  padding:10px 12px;
+  color:var(--ink);
+  min-height:60px;
+}
+.draft-preview strong{
+  display:block;
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:2px;
+}
 .danger{color:var(--danger)}
 .link-btn{border:none;background:none;text-decoration:underline;padding:0;border-radius:0;min-height:0;font-size:15.5px}
 .profitloss-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 18px}
@@ -133,6 +156,7 @@ footer{text-align:center;padding:22px;color:var(--muted);font-size:15.5px}
   h1{font-size:36px}
   h2{font-size:25px}
   .grid.two,.grid.three,.dashboard,.profitloss-grid,.cashflow-summary,.cashflow-grid{grid-template-columns:1fr}
+  .draft-preview{grid-template-columns:1fr}
   #cashFlowBookFilter{width:100%;margin-top:12px}
   main{padding:14px}
   .card{padding:18px;border-radius:18px}

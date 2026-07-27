@@ -66,6 +66,29 @@
       <button id="signOutBtn" type="button"></button>
     </div>
 
+    <section class="card screenshot-card">
+      <div class="section-head">
+        <div>
+          <h2>採購截圖快速記帳</h2>
+          <p>上傳下單或付款截圖，先辨識成一筆支出草稿，確認欄位後再按下方表單的儲存。</p>
+        </div>
+        <span id="screenshotStatus" class="pill">尚未辨識</span>
+      </div>
+      <div class="grid two">
+        <label>採購截圖
+          <input id="screenshotReceiptInput" type="file" accept="image/*" capture="environment">
+        </label>
+        <div class="form-actions screenshot-actions">
+          <button id="recognizeScreenshotBtn" type="button" class="primary">辨識截圖</button>
+          <button id="applyScreenshotDraftBtn" type="button" disabled>套用到表單</button>
+        </div>
+      </div>
+      <label>辨識文字與草稿檢查
+        <textarea id="screenshotOcrText" rows="5" placeholder="辨識結果會出現在這裡，也可以貼上下單文字後再套用。"></textarea>
+      </label>
+      <div id="screenshotDraftPreview" class="draft-preview"></div>
+    </section>
+
     <section class="card">
       <h2>新增一筆</h2>
       <form id="entryForm">
@@ -161,5 +184,6 @@
   <script src="monthly-report.js"></script>
   <script src="cashflow.js"></script>
   <script src="profitloss.js"></script>
+  <script src="js/screenshot-bookkeeping.js"></script>
 </body>
 </html>

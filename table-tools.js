@@ -1,4 +1,32 @@
 (() => {
+  const RANGE_KEY = 'hanaTaxBookLedgerRange';
+
+  function readRange(){
+    try { return JSON.parse(localStorage.getItem(RANGE_KEY) || '{}'); } catch { return {}; }
+  }
+
+  function writeRange(){
+    localStorage.setItem(RANGE_KEY, JSON.stringify({
+      start: document.getElementById('ledgerStartDate')?.value || '',
+      end: document.getElementById('ledgerEndDate')?.value || ''
+    }));
+  }
+
+  function selectedRange(){
+    return {
+      start: document.getElementById('ledgerStartDate')?.value || '',
+      end: document.getElementById('ledgerEndDate')?.value || ''
+    };
+  }
+
+  function inSelectedRange(entry){
+    const {start, end} = selectedRange();
+    const date = String(entry?.date || '');
+    if(start && date < start) return false;
+    if(end && date > end) return false;
+    return true;
+  }
+
   function injectTableStyles(){
     if(document.getElementById('taxbookTableToolsStyle')) return;
     const style = document.createElement('style');
@@ -48,6 +76,46 @@
       #entriesTable .row-actions .link-btn{
         padding: 4px 6px;
       }
+      .ledger-range-tools{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      .ledger-range-tools label{
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        margin: 0;
+      }
+      .ledger-range-tools input[type="date"]{
+        width: 145px;
+        min-width: 145px;
+      }
+      .ledger-totals{
+        display: grid;
+        grid-template-columns: repeat(5, minmax(120px, 1fr));
+        gap: 10px;
+        margin: 12px 0 0;
+      }
+      .ledger-total-card{
+        border: 1px solid rgba(0,0,0,.08);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #fff;
+      }
+      .ledger-total-card span{
+        display: block;
+        font-size: 12px;
+        opacity: .68;
+        margin-bottom: 4px;
+      }
+      .ledger-total-card strong{
+        font-size: 18px;
+      }
       @media (max-width: 760px){
         .table-wrap{
           max-height: 62vh;
@@ -59,6 +127,12 @@
         #entriesTable th:last-child,
         #entriesTable td:last-child{
           min-width: 154px;
+        }
+        .ledger-range-tools{
+          justify-content: flex-start;
+        }
+        .ledger-totals{
+          grid-template-columns: repeat(2, minmax(120px, 1fr));
         }
       }
     `;
@@ -79,8 +153,69 @@
     return '待確認';
   }
 
+  function injectLedgerRangeTools(){
+    if(document.getElementById('ledgerRangeTools')) return;
+    const table = document.getElementById('entriesTable');
+    const card = table?.closest('.card');
+    const head = card?.querySelector('.section-head');
+    const tools = head?.querySelector('.entry-tools');
+    if(!card || !head || !tools) return;
+
+    const saved = readRange();
+    const range = document.createElement('div');
+    range.className = 'ledger-range-tools';
+    range.id = 'ledgerRangeTools';
+    range.innerHTML = `
+      <label>起日<input id="ledgerStartDate" type="date" value="${saved.start || ''}"></label>
+      <label>迄日<input id="ledgerEndDate" type="date" value="${saved.end || ''}"></label>
+      <button id="ledgerClearRangeBtn" type="button">清除區間</button>
+    `;
+    tools.after(range);
+
+    const rerender = () => { writeRange(); if(typeof window.render === 'function') window.render(); };
+    document.getElementById('ledgerStartDate').addEventListener('change', rerender);
+    document.getElementById('ledgerEndDate').addEventListener('change', rerender);
+    document.getElementById('ledgerClearRangeBtn').addEventListener('click', () => {
+      document.getElementById('ledgerStartDate').value = '';
+      document.getElementById('ledgerEndDate').value = '';
+      rerender();
+    });
+
+    const totals = document.createElement('div');
+    totals.id = 'ledgerTotals';
+    totals.className = 'ledger-totals';
+    const wrap = table.closest('.table-wrap');
+    wrap?.before(totals);
+  }
+
+  function applyLedgerRange(list){
+    return list.map(migrateEntry).filter(inSelectedRange);
+  }
+
+  function renderLedgerTotals(list){
+    const target = document.getElementById('ledgerTotals');
+    if(!target) return;
+    const scoped = list.map(migrateEntry);
+    const income = scoped.filter(e => e.kind === 'income').reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+    const expense = scoped.filter(e => e.kind === 'expense').reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+    const asset = scoped.filter(e => e.kind === 'asset').reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+    const transfer = scoped.filter(e => e.kind === 'transfer').reduce((sum, e) => sum + Number(e.grossAmount || 0), 0);
+    const net = income - expense;
+    target.innerHTML = `
+      <div class="ledger-total-card"><span>區間收入</span><strong>${money(income)}</strong></div>
+      <div class="ledger-total-card"><span>區間支出</span><strong>${money(expense)}</strong></div>
+      <div class="ledger-total-card"><span>區間淨額</span><strong>${money(net)}</strong></div>
+      <div class="ledger-total-card"><span>資產/設備</span><strong>${money(asset)}</strong></div>
+      <div class="ledger-total-card"><span>筆數</span><strong>${money(scoped.length)}</strong></div>
+    `;
+  }
+
   window.renderEntries = function(list){
-    const rows = list.map(raw => {
+    injectLedgerRangeTools();
+    const rangedList = applyLedgerRange(list);
+    renderLedgerTotals(rangedList);
+
+    const rows = rangedList.map(raw => {
       const e = migrateEntry(raw);
       return `<tr>
         <td>${html(e.date)}</td>
@@ -97,7 +232,7 @@
     }).join('');
     const target = document.getElementById('entriesTable');
     if(!target) return;
-    target.innerHTML = `<thead><tr><th>日期</th><th>類型</th><th>帳務</th><th>會計科目</th><th>內帳標籤</th><th>對象</th><th>憑證</th><th>金額</th><th>附件</th><th>操作</th></tr></thead><tbody>${rows || '<tr><td colspan="10">尚無資料</td></tr>'}</tbody>`;
+    target.innerHTML = `<thead><tr><th>日期</th><th>類型</th><th>帳務</th><th>會計科目</th><th>內帳標籤</th><th>對象</th><th>憑證</th><th>金額</th><th>附件</th><th>操作</th></tr></thead><tbody>${rows || '<tr><td colspan="10">此區間尚無資料</td></tr>'}</tbody>`;
   };
 
   function duplicateEntry(id){
@@ -135,5 +270,6 @@
   };
 
   injectTableStyles();
+  injectLedgerRangeTools();
   if(typeof previousRender === 'function') window.render();
 })();

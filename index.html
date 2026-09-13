@@ -125,9 +125,9 @@
             <select id="paymentMethod"><option>現金</option><option>轉帳</option><option>刷卡</option><option>LINE Pay</option><option>街口</option><option>平台代收</option><option>其他</option></select>
           </label>
           <label>專案/用途<input id="project" placeholder="例：開幕、課程、材料採購"></label>
-          <label>未稅金額<input id="netAmount" type="number" min="0" step="1" placeholder="可留空"></label>
+          <label>未稅金額<input id="netAmount" type="number" min="0" step="1" placeholder="自動計算，可手動調整"></label>
           <label>營業稅額<input id="taxAmount" type="number" min="0" step="1" value="0"></label>
-          <label>總金額<input id="grossAmount" type="number" min="0" step="1" required></label>
+          <label>總金額<input id="grossAmount" type="number" min="0" step="1" required placeholder="輸入含稅總金額"></label>
           <label>是否可列外帳/報稅
             <select id="taxDeductible"><option value="yes">是</option><option value="no">否，僅內帳</option><option value="review">待會計確認</option></select>
           </label>
@@ -186,5 +186,6 @@
   <script src="profitloss.js"></script>
   <script src="js/screenshot-bookkeeping.js"></script>
   <script src="table-tools.js"></script>
+  <script src="form-tools.js"></script>
 </body>
 </html>

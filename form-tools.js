@@ -44,9 +44,34 @@
     }
   }
 
+  function renameKpiaTag(){
+    const select = byId('internalTag');
+    if(select){
+      [...select.options].forEach(option => {
+        if(option.textContent === 'KPIA課程') option.textContent = '課程教材';
+        if(option.value === 'KPIA課程') option.value = '課程教材';
+      });
+      if(select.value === 'KPIA課程') select.value = '課程教材';
+    }
+
+    if(Array.isArray(window.entries)){
+      let changed = false;
+      window.entries.forEach(entry => {
+        if(entry?.internalTag === 'KPIA課程'){
+          entry.internalTag = '課程教材';
+          changed = true;
+        }
+      });
+      if(changed && typeof window.saveEntriesChanged === 'function') window.saveEntriesChanged();
+    }
+  }
+
   function bind(){
     const form = byId('entryForm');
     const grossInput = byId('grossAmount');
+    const kindInput = byId('kind');
+    const resetBtn = byId('resetFormBtn');
+
     if(form && !form.dataset.preventEnterSubmit){
       form.dataset.preventEnterSubmit = 'true';
       form.addEventListener('keydown', preventEnterSubmit);
@@ -56,7 +81,19 @@
       grossInput.addEventListener('input', calculateTaxFromGross);
       grossInput.addEventListener('change', calculateTaxFromGross);
     }
+    if(kindInput && !kindInput.dataset.kpiaRenameBound){
+      kindInput.dataset.kpiaRenameBound = 'true';
+      kindInput.addEventListener('change', () => setTimeout(renameKpiaTag, 0));
+    }
+    if(resetBtn && !resetBtn.dataset.kpiaRenameBound){
+      resetBtn.dataset.kpiaRenameBound = 'true';
+      resetBtn.addEventListener('click', () => setTimeout(renameKpiaTag, 0));
+    }
+
     injectHint();
+    renameKpiaTag();
+    setTimeout(renameKpiaTag, 0);
+    setTimeout(renameKpiaTag, 300);
   }
 
   if(document.readyState === 'loading'){

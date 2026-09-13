@@ -1,8 +1,8 @@
-const CACHE_NAME = 'hana-tax-book-sync-v30';
+const CACHE_NAME = 'hana-tax-book-sync-v31';
 const ASSETS = [
   './','./index.html','./styles.css','./manifest.webmanifest',
   './app.js','./monthly-report.js','./sync.js','./cashflow.js','./profitloss.js',
-  './js/screenshot-bookkeeping.js','./table-tools.js'
+  './js/screenshot-bookkeeping.js','./table-tools.js','./form-tools.js'
 ];
 
 self.addEventListener('install', event => {

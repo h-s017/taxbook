@@ -15,8 +15,8 @@
       return;
     }
 
-    const net = round(gross / 1.05);
-    const tax = gross - net;
+    const net = round(gross * 0.95);
+    const tax = round(gross * 0.05);
     netInput.value = net;
     taxInput.value = tax;
   }
@@ -34,12 +34,12 @@
     const grossInput = byId('grossAmount');
     if(!grossInput || grossInput.dataset.taxHintAdded) return;
     grossInput.dataset.taxHintAdded = 'true';
-    grossInput.placeholder = grossInput.placeholder || '輸入含稅總金額';
+    grossInput.placeholder = grossInput.placeholder || '輸入總金額';
     const label = grossInput.closest('label');
     if(label && !label.querySelector('.tax-calc-hint')){
       const hint = document.createElement('span');
       hint.className = 'tax-calc-hint';
-      hint.textContent = '輸入後自動反推未稅與 5% 營業稅';
+      hint.textContent = '輸入後自動填入未稅金額 95% 與營業稅額 5%';
       label.appendChild(hint);
     }
   }
